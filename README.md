@@ -29,6 +29,14 @@ M1 自动战斗原型：
 
 覆盖：出兵/推进、跨路不交战、近战伤害、投射物、破甲/盾墙/攻城被动、法师溅射、基地扣血与胜负、默认战斗可结束、确定性。
 
+可选截图（需要图形环境）：
+
+```bash
+"D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --path . --script tests/capture.gd
+```
+
+输出到 `build/m1_screenshot.png`（已 gitignore）。
+
 ## M1 调试按键
 
 | 按键 | 行为 |
