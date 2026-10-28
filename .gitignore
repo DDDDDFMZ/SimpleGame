@@ -1,0 +1,18 @@
+# Godot
+.godot/
+.import/
+export/
+*.translation
+
+# Builds
+build/
+dist/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Local tools (portable Godot etc.)
+tools/
