@@ -92,6 +92,12 @@ func _spawn_unit(team: int, lane: int, def_id: String) -> void:
 	var spawn_x := player_base_x + 12.0 if team == PLAYER else enemy_base_x - 12.0
 	var unit := SimUnit.new(next_id, team, lane, def_id, def, spawn_x)
 	unit.slot = _next_slot(team, lane)
+	# Stagger spawns slightly so stacked placeholders remain readable.
+	if team == PLAYER:
+		unit.x -= unit.slot * 6.0
+	else:
+		unit.x += unit.slot * 6.0
+	unit.x = clampf(unit.x, player_base_x, enemy_base_x)
 	next_id += 1
 	units.append(unit)
 
