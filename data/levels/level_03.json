@@ -1,0 +1,129 @@
+{
+  "id": "level_03",
+  "name": "Crows",
+  "mode": "defense",
+  "base_hp": 20,
+  "base_damage": 1,
+  "starting_gold": 150,
+  "base_income": 5.0,
+  "star_thresholds": [
+    12,
+    18
+  ],
+  "available_units": [
+    "swordsman",
+    "spearman",
+    "archer",
+    "mage",
+    "knight",
+    "catapult"
+  ],
+  "available_buildings": [
+    "farm",
+    "barracks"
+  ],
+  "intro_message": "Light swarm. Mages burn crowds.",
+  "waves": [
+    {
+      "time": 20,
+      "lane": 0,
+      "message": "Wave 1: light spears",
+      "spawns": [
+        {
+          "unit": "spearman",
+          "count": 2
+        },
+        {
+          "unit": "spearman",
+          "count": 2,
+          "lane": 1
+        }
+      ]
+    },
+    {
+      "time": 70,
+      "lane": 0,
+      "message": "Wave 2: archer line",
+      "spawns": [
+        {
+          "unit": "archer",
+          "count": 3
+        },
+        {
+          "unit": "spearman",
+          "count": 2,
+          "lane": 1
+        }
+      ]
+    },
+    {
+      "time": 120,
+      "lane": 0,
+      "message": "Wave 3: dense crowd",
+      "spawns": [
+        {
+          "unit": "spearman",
+          "count": 4
+        },
+        {
+          "unit": "archer",
+          "count": 3,
+          "lane": 1
+        }
+      ]
+    },
+    {
+      "time": 170,
+      "lane": 0,
+      "message": "Wave 4: elite bows",
+      "spawns": [
+        {
+          "unit": "archer",
+          "count": 1,
+          "elite": true
+        },
+        {
+          "unit": "spearman",
+          "count": 4,
+          "lane": 1
+        }
+      ]
+    },
+    {
+      "time": 220,
+      "lane": 0,
+      "message": "Wave 5: both lanes",
+      "spawns": [
+        {
+          "unit": "spearman",
+          "count": 5
+        },
+        {
+          "unit": "archer",
+          "count": 4,
+          "lane": 1
+        }
+      ]
+    },
+    {
+      "time": 270,
+      "lane": 0,
+      "message": "Wave 6: final mix",
+      "spawns": [
+        {
+          "unit": "spearman",
+          "count": 6
+        },
+        {
+          "unit": "archer",
+          "count": 4,
+          "lane": 1
+        },
+        {
+          "unit": "mage",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

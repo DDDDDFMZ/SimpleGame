@@ -11,41 +11,41 @@
   "available_buildings": ["farm", "barracks"],
   "intro_message": "Build economy, hold both lanes.",
   "waves": [
-    {
-      "time": 20,
-      "lane": 0,
-      "message": "Wave 1: swordsmen",
-      "spawns": [
-        {"unit": "swordsman", "count": 3}
-      ]
-    },
-    {
-      "time": 70,
-      "lane": 0,
-      "message": "Wave 2: more swordsmen",
-      "spawns": [
-        {"unit": "swordsman", "count": 5}
-      ]
-    },
-    {
-      "time": 130,
-      "lane": 0,
-      "message": "Wave 3: archers behind shields",
-      "spawns": [
-        {"unit": "swordsman", "count": 4},
-        {"unit": "archer", "count": 3}
-      ]
-    },
-    {
-      "time": 190,
-      "lane": 0,
-      "message": "Wave 4: both lanes",
-      "spawns": [
-        {"unit": "swordsman", "count": 5},
-        {"unit": "archer", "count": 4},
-        {"unit": "swordsman", "count": 1, "elite": true},
-        {"unit": "swordsman", "count": 3, "lane": 1}
-      ]
-    }
+	{
+	  "time": 20,
+	  "lane": 0,
+	  "message": "Wave 1: swordsmen",
+	  "spawns": [
+		{"unit": "swordsman", "count": 3}
+	  ]
+	},
+	{
+	  "time": 70,
+	  "lane": 0,
+	  "message": "Wave 2: more swordsmen",
+	  "spawns": [
+		{"unit": "swordsman", "count": 5}
+	  ]
+	},
+	{
+	  "time": 130,
+	  "lane": 0,
+	  "message": "Wave 3: archers behind shields",
+	  "spawns": [
+		{"unit": "swordsman", "count": 4},
+		{"unit": "archer", "count": 3}
+	  ]
+	},
+	{
+	  "time": 190,
+	  "lane": 0,
+	  "message": "Wave 4: both lanes",
+	  "spawns": [
+		{"unit": "swordsman", "count": 5},
+		{"unit": "archer", "count": 4},
+		{"unit": "swordsman", "count": 1, "elite": true},
+		{"unit": "swordsman", "count": 3, "lane": 1}
+	  ]
+	}
   ]
 }

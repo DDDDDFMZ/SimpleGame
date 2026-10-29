@@ -1,0 +1,60 @@
+{
+  "id": "level_02",
+  "name": "Iron Guests",
+  "mode": "defense",
+  "base_hp": 20,
+  "base_damage": 1,
+  "starting_gold": 120,
+  "base_income": 4.0,
+  "star_thresholds": [12, 18],
+  "available_units": ["swordsman", "spearman", "archer", "mage", "knight", "catapult"],
+  "available_buildings": ["farm", "barracks"],
+  "intro_message": "Heavy armor. Spears pierce it.",
+  "waves": [
+    {
+      "time": 20,
+      "lane": 0,
+      "message": "Wave 1: heavy swords",
+      "spawns": [
+        {"unit": "swordsman", "count": 4},
+        {"unit": "archer", "count": 2, "lane": 1}
+      ]
+    },
+    {
+      "time": 70,
+      "lane": 0,
+      "message": "Wave 2: pure heavy",
+      "spawns": [
+        {"unit": "swordsman", "count": 6}
+      ]
+    },
+    {
+      "time": 120,
+      "lane": 0,
+      "message": "Wave 3: shields and bows",
+      "spawns": [
+        {"unit": "swordsman", "count": 5},
+        {"unit": "archer", "count": 4, "lane": 1}
+      ]
+    },
+    {
+      "time": 170,
+      "lane": 0,
+      "message": "Wave 4: elite shield",
+      "spawns": [
+        {"unit": "swordsman", "count": 2, "elite": true},
+        {"unit": "archer", "count": 5, "lane": 1}
+      ]
+    },
+    {
+      "time": 220,
+      "lane": 0,
+      "message": "Wave 5: mixed heavy",
+      "spawns": [
+        {"unit": "swordsman", "count": 8},
+        {"unit": "archer", "count": 6, "lane": 1},
+        {"unit": "spearman", "count": 4}
+      ]
+    }
+  ]
+}

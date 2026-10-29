@@ -28,6 +28,9 @@ var slot: int = 0
 var charge_used: bool = false
 var stationary_time: float = 0.0
 var is_elite: bool = false
+var manual_order: bool = false
+var move_target_x: float = 0.0
+var hold_position: bool = false
 
 
 func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float, p_elite: bool = false) -> void:

@@ -48,9 +48,10 @@ var next_projectile_id: int = 1
 var base_hp: Array = [20, 20]
 var base_hp_max: int = 20
 var base_damage: int = 1
-var player_base_x: float = 50.0
-var enemy_base_x: float = 590.0
+var player_base_x: float = 80.0
+var enemy_base_x: float = 1520.0
 var lane_count: int = 2
+var advance_lines: Array = [92.0, 92.0]
 
 var gold: float = 120.0
 var base_income: float = 4.0
@@ -84,6 +85,7 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	base_hp_max = int(level.get("base_hp", p_base_hp))
 	base_damage = int(level.get("base_damage", p_base_damage))
 	base_hp = [base_hp_max, base_hp_max]
+	advance_lines = [player_base_x + 12.0, player_base_x + 12.0]
 	base_income = float(level.get("base_income", 4.0))
 	gold = float(level.get("starting_gold", 120.0))
 
@@ -152,6 +154,38 @@ func queue_build(slot: int) -> void:
 	commands.append({"type": "build", "slot": slot})
 
 
+func queue_set_advance_line(lane: int, x: float) -> void:
+	if finished or lane < 0 or lane >= lane_count:
+		return
+	commands.append({
+		"type": "advance_line",
+		"lane": lane,
+		"x": clampf(x, player_base_x + 8.0, enemy_base_x - 8.0),
+	})
+
+
+func queue_move_squad(unit_ids: Array, x: float) -> void:
+	if finished:
+		return
+	commands.append({
+		"type": "move_squad",
+		"ids": unit_ids.duplicate(),
+		"x": clampf(x, player_base_x, enemy_base_x - 8.0),
+	})
+
+
+func queue_hold_squad(unit_ids: Array) -> void:
+	if finished:
+		return
+	commands.append({"type": "hold_squad", "ids": unit_ids.duplicate()})
+
+
+func queue_return_squad(unit_ids: Array) -> void:
+	if finished:
+		return
+	commands.append({"type": "return_squad", "ids": unit_ids.duplicate()})
+
+
 func tick() -> void:
 	if finished:
 		return
@@ -205,7 +239,54 @@ func _apply_commands() -> void:
 				_spawn_unit(int(cmd["team"]), int(cmd["lane"]), String(cmd["def_id"]), bool(cmd.get("elite", false)))
 			"build":
 				_apply_build(int(cmd["slot"]))
+			"advance_line":
+				_apply_advance_line(int(cmd["lane"]), float(cmd["x"]))
+			"move_squad":
+				_apply_move_squad(cmd["ids"], float(cmd["x"]))
+			"hold_squad":
+				_apply_hold_squad(cmd["ids"])
+			"return_squad":
+				_apply_return_squad(cmd["ids"])
 	commands.clear()
+
+
+func _apply_advance_line(lane: int, x: float) -> void:
+	if lane < 0 or lane >= lane_count:
+		return
+	advance_lines[lane] = x
+	for u in units:
+		if u.alive and u.team == PLAYER and u.lane == lane and not u.manual_order:
+			u.move_target_x = x
+
+
+func _apply_move_squad(unit_ids: Array, x: float) -> void:
+	for id in unit_ids:
+		var u := _unit_by_id(int(id))
+		if u == null or not u.alive or u.team != PLAYER:
+			continue
+		u.manual_order = true
+		u.hold_position = false
+		u.move_target_x = x
+
+
+func _apply_hold_squad(unit_ids: Array) -> void:
+	for id in unit_ids:
+		var u := _unit_by_id(int(id))
+		if u == null or not u.alive or u.team != PLAYER:
+			continue
+		u.manual_order = true
+		u.hold_position = true
+		u.move_target_x = u.x
+
+
+func _apply_return_squad(unit_ids: Array) -> void:
+	for id in unit_ids:
+		var u := _unit_by_id(int(id))
+		if u == null or not u.alive or u.team != PLAYER:
+			continue
+		u.manual_order = false
+		u.hold_position = false
+		u.move_target_x = float(advance_lines[u.lane])
 
 
 func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false) -> void:
@@ -239,6 +320,9 @@ func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false) -> v
 	else:
 		unit.x += unit.slot * 6.0
 	unit.x = clampf(unit.x, player_base_x, enemy_base_x)
+	unit.manual_order = false
+	unit.hold_position = false
+	unit.move_target_x = float(advance_lines[lane]) if team == PLAYER else player_base_x
 
 	next_id += 1
 	units.append(unit)
@@ -327,6 +411,10 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 		if u.attack_cd <= 0.0:
 			_perform_attack(u, target)
 			u.attack_cd = _attack_interval(u)
+	elif u.hold_position:
+		u.state = "hold"
+		u.target_id = target.id if target != null else -1
+		u.stationary_time += dt
 	else:
 		u.state = "advance"
 		if target != null:
@@ -334,12 +422,15 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 			moved = _move_unit(u, target.x, dt)
 		else:
 			u.target_id = -1
-			var goal := enemy_base_x if u.team == PLAYER else player_base_x
+			var goal := player_base_x
+			if u.team == PLAYER:
+				goal = u.move_target_x if u.manual_order else float(advance_lines[u.lane])
 			moved = _move_unit(u, goal, dt)
 		if moved:
 			u.stationary_time = 0.0
 		else:
 			u.stationary_time += dt
+			u.state = "hold"
 
 	_check_base_arrival(u)
 
@@ -606,6 +697,9 @@ func get_snapshot() -> Dictionary:
 			"slot": u.slot,
 			"target_id": u.target_id,
 			"is_elite": u.is_elite,
+			"manual_order": u.manual_order,
+			"hold_position": u.hold_position,
+			"move_target_x": u.move_target_x,
 		})
 
 	var projectile_data: Array = []
@@ -631,6 +725,9 @@ func get_snapshot() -> Dictionary:
 		"player_base_x": player_base_x,
 		"enemy_base_x": enemy_base_x,
 		"lane_count": lane_count,
+		"world_width": 1600.0,
+		"advance_lines": advance_lines.duplicate(),
+		"level_name": String(level.get("name", "Sandbox")),
 		"gold": int(floor(gold)),
 		"gold_exact": gold,
 		"income": income_per_sec,

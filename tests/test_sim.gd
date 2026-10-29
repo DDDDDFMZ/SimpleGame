@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_test_damage_modifiers()
 	_test_splash()
 	_test_base_damage_and_win()
+	_test_orders()
 	_test_economy()
 	_test_buildings()
 	_test_kill_reward()
@@ -18,6 +19,7 @@ func _initialize() -> void:
 	_test_level_data()
 	_test_level_no_input()
 	_test_hud_input()
+	_test_camera()
 	_test_determinism()
 
 	if failures == 0:
@@ -46,13 +48,14 @@ func _load_json(path: String) -> Dictionary:
 
 func _test_spawn_and_advance() -> void:
 	var sim := BattleSim.new(1, 20, 1, {}, false)
+	sim.queue_set_advance_line(0, 500.0)
 	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
 	sim.tick()
 	_check(sim.units.size() == 1, "spawn adds one unit")
 
 	var start_x: float = sim.units[0].x
 	sim.tick()
-	_check(sim.units[0].x > start_x, "unit advances toward enemy base")
+	_check(sim.units[0].x > start_x, "unit advances toward advance line")
 
 
 func _test_lane_isolation() -> void:
@@ -144,6 +147,8 @@ func _test_splash() -> void:
 
 func _test_base_damage_and_win() -> void:
 	var sim := BattleSim.new(1, 3, 1, {}, false)
+	sim.queue_set_advance_line(0, sim.enemy_base_x - 1.0)
+	sim.tick()
 	for i in range(3):
 		sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
 		sim.tick()
@@ -156,6 +161,46 @@ func _test_base_damage_and_win() -> void:
 	_check(sim.is_finished(), "battle finishes at base hp 0")
 	_check(sim.winner == BattleSim.PLAYER, "player wins when enemy base reaches 0")
 	_check(int(sim.base_hp[BattleSim.ENEMY]) == 0, "enemy base hp reaches 0")
+
+
+func _test_orders() -> void:
+	var sim := BattleSim.new(1, 20, 1, {}, false)
+	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
+	sim.tick()
+	var unit: SimUnit = sim.units[0]
+	var id := unit.id
+	_check(not unit.manual_order, "new unit defaults to advance line")
+
+	sim.queue_set_advance_line(0, 500.0)
+	sim.tick()
+	for i in range(120):
+		sim.tick()
+	unit = sim.get_unit_by_id(id)
+	_check(unit != null and unit.x > 200.0, "advance line pulls default unit forward")
+
+	sim.queue_move_squad([id], 700.0)
+	sim.tick()
+	unit = sim.get_unit_by_id(id)
+	_check(unit != null and unit.manual_order, "move order sets manual control")
+	for i in range(120):
+		sim.tick()
+	unit = sim.get_unit_by_id(id)
+	_check(unit != null and unit.x > 500.0, "move order moves unit toward target")
+
+	sim.queue_hold_squad([id])
+	sim.tick()
+	var hold_x: float = unit.x
+	for i in range(40):
+		sim.tick()
+	unit = sim.get_unit_by_id(id)
+	_check(unit != null and is_equal_approx(unit.x, hold_x), "hold order stops movement")
+
+	sim.queue_return_squad([id])
+	sim.tick()
+	for i in range(120):
+		sim.tick()
+	unit = sim.get_unit_by_id(id)
+	_check(unit != null and unit.x < hold_x, "return order sends unit back to advance line")
 
 
 func _test_economy() -> void:
@@ -263,6 +308,11 @@ func _test_level_data() -> void:
 	_check(int(level.get("starting_gold", 0)) == 120, "level 1 starting gold is 120")
 	_check(level.get("waves", []).size() == 4, "level 1 has four waves")
 
+	var level2 := _load_json("res://data/levels/level_02.json")
+	var level3 := _load_json("res://data/levels/level_03.json")
+	_check(level2.get("waves", []).size() == 5, "level 2 has five waves")
+	_check(level3.get("waves", []).size() == 6, "level 3 has six waves")
+
 
 func _test_level_no_input() -> void:
 	var level := _load_json("res://data/levels/level_01.json")
@@ -302,10 +352,10 @@ func _test_hud_input() -> void:
 	_click(hud, Vector2(40.0, 330.0))
 	_check(spawned == ["swordsman"], "HUD card click requests spawn")
 
-	var lanes: Array = []
-	hud.lane_requested.connect(func(lane: int) -> void: lanes.append(lane))
-	_click(hud, Vector2(590.0, 30.0))
-	_check(lanes == [1], "HUD lane tab requests lane switch")
+	var minimap: Array = []
+	hud.minimap_clicked.connect(func(lane: int, world_x: float) -> void: minimap.append([lane, world_x]))
+	_click(hud, Vector2(590.0, 40.0))
+	_check(minimap.size() == 1 and int(minimap[0][0]) == 1, "HUD minimap requests lane switch")
 
 	var built: Array = []
 	hud.build_requested.connect(func(slot: int) -> void: built.append(slot))
@@ -315,6 +365,28 @@ func _test_hud_input() -> void:
 	_check(built == [0], "HUD building row requests build")
 
 	hud.queue_free()
+
+
+func _test_camera() -> void:
+	var cam := CameraRig.new()
+	root.add_child(cam)
+
+	var snapshot := {
+		"advance_lines": [92.0, 92.0],
+		"units": [{"team": 0, "lane": 0, "x": 1500.0}],
+	}
+	cam.focus_lane(snapshot, 0)
+	_check(is_equal_approx(cam.position.x, 1280.0), "camera follows front unit and clamps at right edge")
+
+	snapshot = {"advance_lines": [1000.0, 92.0], "units": []}
+	cam.focus_lane(snapshot, 0)
+	_check(is_equal_approx(cam.position.x, 1120.0), "camera follows advance line")
+
+	cam.jump_to(0.0)
+	_check(is_equal_approx(cam.position.x, 320.0), "camera jump clamps at left edge")
+	cam.pan(10000.0)
+	_check(is_equal_approx(cam.position.x, 1280.0), "camera pan clamps at right edge")
+	cam.queue_free()
 
 
 func _click(hud: BattleHUD, pos: Vector2) -> void:
