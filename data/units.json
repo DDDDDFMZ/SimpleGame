@@ -1,6 +1,7 @@
 {
   "swordsman": {
     "name_key": "unit.swordsman",
+    "display_name": "Swordsman",
     "cost": 30,
     "pop": 1,
     "hp": 180,
@@ -12,10 +13,12 @@
     "armor_type": "heavy",
     "passive": "shield_wall",
     "projectile_speed": 0,
+    "cooldown": 2.0,
     "unlock_level": 1
   },
   "spearman": {
     "name_key": "unit.spearman",
+    "display_name": "Spearman",
     "cost": 35,
     "pop": 1,
     "hp": 140,
@@ -27,10 +30,12 @@
     "armor_type": "light",
     "passive": "armor_pierce",
     "projectile_speed": 0,
+    "cooldown": 2.5,
     "unlock_level": 2
   },
   "archer": {
     "name_key": "unit.archer",
+    "display_name": "Archer",
     "cost": 40,
     "pop": 1,
     "hp": 85,
@@ -42,10 +47,12 @@
     "armor_type": "light",
     "passive": "volley",
     "projectile_speed": 300,
+    "cooldown": 3.0,
     "unlock_level": 1
   },
   "mage": {
     "name_key": "unit.mage",
+    "display_name": "Mage",
     "cost": 60,
     "pop": 2,
     "hp": 95,
@@ -57,10 +64,12 @@
     "armor_type": "light",
     "passive": "splash",
     "projectile_speed": 250,
+    "cooldown": 4.0,
     "unlock_level": 3
   },
   "knight": {
     "name_key": "unit.knight",
+    "display_name": "Knight",
     "cost": 70,
     "pop": 2,
     "hp": 240,
@@ -72,10 +81,12 @@
     "armor_type": "heavy",
     "passive": "charge",
     "projectile_speed": 0,
+    "cooldown": 5.0,
     "unlock_level": 4
   },
   "catapult": {
     "name_key": "unit.catapult",
+    "display_name": "Catapult",
     "cost": 80,
     "pop": 2,
     "hp": 110,
@@ -87,6 +98,7 @@
     "armor_type": "light",
     "passive": "siege_master",
     "projectile_speed": 200,
+    "cooldown": 5.0,
     "unlock_level": 5
   }
 }

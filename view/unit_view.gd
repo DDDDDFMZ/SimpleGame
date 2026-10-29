@@ -22,6 +22,8 @@ func _draw() -> void:
 	# Placeholder body: 14x20 rectangle, not final art.
 	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), color)
 	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), Color(0.0, 0.0, 0.0, 0.45), false, 1.0)
+	if bool(data.get("is_elite", false)):
+		draw_rect(Rect2(-8.0, -11.0, 16.0, 22.0), Color("#D9A441"), false, 1.5)
 
 	# Simple attack-type glyph for debugging.
 	var attack_type := String(data.get("attack_type", "melee"))

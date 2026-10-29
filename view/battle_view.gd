@@ -8,12 +8,18 @@ const VIEW_H := 360.0
 var runner: SimRunner
 var unit_views: Dictionary = {}
 var last_snapshot: Dictionary = {}
+var active_lane: int = 0
 
 
 func setup(p_runner: SimRunner) -> void:
 	runner = p_runner
 	if not runner.ticked.is_connected(_on_ticked):
 		runner.ticked.connect(_on_ticked)
+
+
+func set_active_lane(lane: int) -> void:
+	active_lane = clampi(lane, 0, LANE_Y.size() - 1)
+	queue_redraw()
 
 
 func reset_view() -> void:
@@ -58,6 +64,8 @@ func _draw() -> void:
 		var y := float(LANE_Y[i])
 		draw_rect(Rect2(50.0, y - 40.0, 540.0, 80.0), Color("#2E2A3A"))
 		draw_line(Vector2(50.0, y), Vector2(590.0, y), Color("#3E3A4A"), 1.0)
+		if i == active_lane:
+			draw_rect(Rect2(50.0, y - 40.0, 540.0, 80.0), Color("#D9A441"), false, 2.0)
 
 	# Base gates.
 	draw_rect(Rect2(20.0, 40.0, 30.0, 280.0), Color("#2B4A6F"))

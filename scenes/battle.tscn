@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scenes/battle.gd" id="1_battle"]
 [ext_resource type="Script" path="res://sim/sim_runner.gd" id="2_runner"]
 [ext_resource type="Script" path="res://view/battle_view.gd" id="3_view"]
+[ext_resource type="Script" path="res://view/battle_hud.gd" id="4_hud"]
 
 [node name="Battle" type="Node2D"]
 script = ExtResource("1_battle")
@@ -15,11 +16,12 @@ script = ExtResource("3_view")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="Status" type="Label" parent="HUD"]
-offset_left = 6.0
-offset_top = 4.0
-offset_right = 634.0
-offset_bottom = 44.0
-theme_override_colors/font_color = Color(0.92, 0.88, 0.78, 1)
-theme_override_font_sizes/font_size = 9
-text = "loading"
+[node name="Root" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("4_hud")

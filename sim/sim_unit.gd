@@ -27,17 +27,21 @@ var alive: bool = true
 var slot: int = 0
 var charge_used: bool = false
 var stationary_time: float = 0.0
+var is_elite: bool = false
 
 
-func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float) -> void:
+func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float, p_elite: bool = false) -> void:
 	id = p_id
 	team = p_team
 	lane = p_lane
 	def_id = p_def_id
 	def = p_def
 	x = p_x
+	is_elite = p_elite
 
 	max_hp = float(def.get("hp", 100.0))
+	if is_elite:
+		max_hp *= 1.5
 	hp = max_hp
 	damage = float(def.get("damage", 10.0))
 	attack_interval = float(def.get("attack_interval", 1.0))

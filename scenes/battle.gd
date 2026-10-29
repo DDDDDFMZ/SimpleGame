@@ -1,70 +1,73 @@
 extends Node2D
 
-const BASE_HP := 10
-const BASE_DAMAGE := 5
+const LEVEL_PATH := "res://data/levels/level_01.json"
 const SEED := 12345
+const UNIT_ORDER := ["swordsman", "spearman", "archer", "mage", "knight", "catapult"]
 
 @onready var runner: SimRunner = $SimRunner
 @onready var view: BattleView = $BattleView
-@onready var status_label: Label = $HUD/Status
+@onready var hud: BattleHUD = $HUD/Root
 
 var sim: BattleSim
+var level_data: Dictionary = {}
+var active_lane: int = 0
 
 
 func _ready() -> void:
+	level_data = _load_level()
 	runner.ticked.connect(_on_ticked)
 	view.setup(runner)
+	hud.spawn_requested.connect(_on_hud_spawn)
+	hud.build_requested.connect(_on_hud_build)
+	hud.lane_requested.connect(_on_hud_lane)
 	_reset_and_start()
 
 
+func _load_level() -> Dictionary:
+	var text := FileAccess.get_file_as_string(LEVEL_PATH)
+	if text.is_empty():
+		push_error("Cannot read level: " + LEVEL_PATH)
+		return {}
+	var parsed: Variant = JSON.parse_string(text)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_error("Invalid level JSON: " + LEVEL_PATH)
+		return {}
+	return parsed
+
+
 func _reset_and_start() -> void:
-	sim = BattleSim.new(SEED, BASE_HP, BASE_DAMAGE)
+	active_lane = 0
+	sim = BattleSim.new(SEED, 20, 1, level_data)
 	runner.setup(sim)
 	view.reset_view()
-	_queue_autostart()
-	_update_hud(sim.get_snapshot())
-
-
-func _queue_autostart() -> void:
-	# M1 debug battle: player has a small advantage so a win is reachable.
-	for i in range(3):
-		sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
-	for i in range(2):
-		sim.queue_spawn(BattleSim.PLAYER, 1, "swordsman")
-	for i in range(2):
-		sim.queue_spawn(BattleSim.ENEMY, 0, "swordsman")
-	sim.queue_spawn(BattleSim.ENEMY, 1, "swordsman")
+	view.set_active_lane(active_lane)
+	hud.close_panel()
+	hud.update_snapshot(sim.get_snapshot(), active_lane)
 
 
 func _on_ticked(snapshot: Dictionary) -> void:
-	_update_hud(snapshot)
+	hud.update_snapshot(snapshot, active_lane)
 
 
-func _update_hud(snapshot: Dictionary) -> void:
-	var hp: Array = snapshot.get("base_hp", [0, 0])
-	var max_hp := int(snapshot.get("base_hp_max", BASE_HP))
-	var player_units := 0
-	var enemy_units := 0
-	for u in snapshot.get("units", []):
-		if int(u.get("team", 0)) == BattleSim.PLAYER:
-			player_units += 1
-		else:
-			enemy_units += 1
+func _on_hud_spawn(def_id: String) -> void:
+	if sim != null:
+		sim.queue_spawn(BattleSim.PLAYER, active_lane, def_id)
 
-	var result := ""
-	if bool(snapshot.get("finished", false)):
-		var winner := int(snapshot.get("winner", -1))
-		if winner < 0:
-			result = "  |  DRAW"
-		elif winner == BattleSim.PLAYER:
-			result = "  |  PLAYER WIN"
-		else:
-			result = "  |  ENEMY WIN"
 
-	status_label.text = (
-		"P base %d/%d   E base %d/%d   |   units P %d  E %d   |   tick %d%s\n"
-		+ "1/2 sword P/E   3/4 archer P/E   5/6 sword P/E lane2   |   R reset   Esc quit"
-	) % [int(hp[0]), max_hp, int(hp[1]), max_hp, player_units, enemy_units, int(snapshot.get("tick", 0)), result]
+func _on_hud_build(slot: int) -> void:
+	if sim != null:
+		sim.queue_build(slot)
+
+
+func _on_hud_lane(lane: int) -> void:
+	_set_lane(lane)
+
+
+func _set_lane(lane: int) -> void:
+	active_lane = clampi(lane, 0, 1)
+	view.set_active_lane(active_lane)
+	if sim != null:
+		hud.update_snapshot(sim.get_snapshot(), active_lane)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -72,25 +75,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	match event.keycode:
-		KEY_1:
-			_spawn(BattleSim.PLAYER, 0, "swordsman")
-		KEY_2:
-			_spawn(BattleSim.ENEMY, 0, "swordsman")
-		KEY_3:
-			_spawn(BattleSim.PLAYER, 0, "archer")
-		KEY_4:
-			_spawn(BattleSim.ENEMY, 0, "archer")
-		KEY_5:
-			_spawn(BattleSim.PLAYER, 1, "swordsman")
-		KEY_6:
-			_spawn(BattleSim.ENEMY, 1, "swordsman")
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
+			var index: int = event.keycode - KEY_1
+			_spawn_by_index(index, event.alt_pressed)
+		KEY_Q:
+			_set_lane(0)
+		KEY_E:
+			_set_lane(1)
+		KEY_B:
+			hud.toggle_panel()
 		KEY_R:
 			_reset_and_start()
+		KEY_SPACE:
+			if sim != null and not sim.is_finished():
+				runner.paused = not runner.paused
 		KEY_ESCAPE:
 			get_tree().quit()
 
 
-func _spawn(team: int, lane: int, def_id: String) -> void:
-	if sim == null:
+func _spawn_by_index(index: int, other_lane: bool) -> void:
+	if index < 0 or index >= UNIT_ORDER.size() or sim == null:
 		return
-	sim.queue_spawn(team, lane, def_id)
+	var lane := 1 - active_lane if other_lane else active_lane
+	sim.queue_spawn(BattleSim.PLAYER, lane, UNIT_ORDER[index])
