@@ -29,8 +29,11 @@ var base_hp_max: int = 20
 var base_damage: int = 1
 var player_base_x: float = 80.0
 var enemy_base_x: float = 1520.0
+var world_width: float = 1600.0
+var world_height: float = 360.0
 var lane_count: int = 2
 var advance_lines: Array = [92.0, 92.0]
+var map_data: MapData
 
 var gold: float = 150.0
 var stipend: float = 2.5
@@ -92,10 +95,23 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	counter_matrix = data.counters
 	pop_max = int(data.get_balance("base_pop", 8))
 
+	map_data = data.map_for_level(level)
+	player_base_x = map_data.base_x(PLAYER)
+	enemy_base_x = map_data.base_x(ENEMY)
+	world_width = map_data.world_width
+	world_height = map_data.world_height
+	lane_count = maxi(1, map_data.route_count())
+	advance_lines = []
+	spawn_cd = []
+	leaks_by_lane = []
+	for lane in range(lane_count):
+		advance_lines.append(map_data.spawn_x(lane, PLAYER))
+		spawn_cd.append({})
+		leaks_by_lane.append(0)
+
 	base_hp_max = int(level.get("base_hp", p_base_hp))
 	base_damage = int(level.get("base_damage", p_base_damage))
 	base_hp = [base_hp_max, base_hp_max]
-	advance_lines = [player_base_x + 12.0, player_base_x + 12.0]
 	stipend = float(level.get("stipend", 2.5))
 	gold = float(level.get("starting_gold", 150.0))
 
@@ -108,7 +124,7 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	var level_mode := String(level.get("mode", ""))
 	defense_mode = level_mode == "defense" or level_mode == "endless"
 	endless_mode = level_mode == "endless"
-	wave_message = String(level.get("intro_message", ""))
+	wave_message = _preferred_text(level, "intro_message_cn", "intro_message")
 	message_timer = 4.0
 
 	meta_unlocked_guilds = p_profile.get("unlocked_guilds", [])
@@ -162,10 +178,10 @@ func queue_spawn(team: int, lane: int, def_id: String, elite: bool = false) -> v
 	if finished:
 		return
 	if not unit_defs.has(def_id):
-		_error("Unknown unit")
+		_error("未知职业")
 		return
 	if lane < 0 or lane >= lane_count:
-		_error("Invalid lane")
+		_error("路线无效")
 		return
 	commands.append({"type": "spawn", "team": team, "lane": lane, "def_id": def_id, "elite": elite})
 
@@ -190,6 +206,13 @@ func queue_set_advance_line(lane: int, x: float) -> void:
 		"lane": lane,
 		"x": clampf(x, player_base_x + 8.0, enemy_base_x - 8.0),
 	})
+
+
+func _preferred_text(source: Dictionary, cn_key: String, fallback_key: String) -> String:
+	var cn := String(source.get(cn_key, ""))
+	if cn != "":
+		return cn
+	return String(source.get(fallback_key, ""))
 
 
 func queue_move_squad(unit_ids: Array, x: float) -> void:
@@ -238,7 +261,7 @@ func tick() -> void:
 
 
 func _update_cooldowns(dt: float) -> void:
-	for lane in range(2):
+	for lane in range(lane_count):
 		for def_id in spawn_cd[lane].keys():
 			var remaining := float(spawn_cd[lane][def_id]) - dt
 			if remaining <= 0.0:
@@ -280,22 +303,22 @@ func _apply_commands() -> void:
 
 func _apply_guild_action(guild_id: String) -> void:
 	if not _guild_is_unlocked(guild_id):
-		_error("Guild locked")
+		_error("协会尚未解锁")
 		return
 	var guild: Dictionary = guild_defs[guild_id]
 	var tiers: Array = guild.get("tiers", [])
 	var next_tier := int(guild_tier.get(guild_id, -1)) + 1
 	if next_tier >= tiers.size():
-		_error("Guild maxed")
+		_error("协会已达最高等级")
 		return
 	var tier: Dictionary = tiers[next_tier]
 	var rank_gate := int(tier.get("rank_gate", 0))
 	if rep_rank < rank_gate:
-		_error("Needs Reputation Rank %d" % rank_gate)
+		_error("需要声望等级 %d" % rank_gate)
 		return
 	var cost := int(tier.get("cost", 0))
 	if economy_enabled and gold < cost:
-		_error("Not enough gold")
+		_error("金币不足")
 		return
 	if economy_enabled:
 		gold -= cost
@@ -306,22 +329,22 @@ func _apply_guild_action(guild_id: String) -> void:
 
 func _apply_promote() -> void:
 	if rep_rank >= promo_kills.size():
-		_error("Max reputation")
+		_error("声望已达最高等级")
 		return
 	var needed := int(promo_kills[rep_rank])
 	var cost := int(promo_cost[rep_rank])
 	if fame < needed:
-		_error("Need %d target kills" % needed)
+		_error("需要击杀 %d 个悬赏目标" % needed)
 		return
 	if economy_enabled and gold < cost:
-		_error("Not enough gold")
+		_error("金币不足")
 		return
 	if economy_enabled:
 		gold -= cost
 		gold_spent_promote += cost
 	rep_rank += 1
 	_recompute_cap()
-	wave_message = "Reputation Rank %d" % rep_rank
+	wave_message = "声望提升至 %d 级" % rep_rank
 	message_timer = 2.0
 
 
@@ -382,13 +405,16 @@ func _apply_return_squad(unit_ids: Array) -> void:
 
 func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false, is_target: bool = false, wave_number: int = 0) -> void:
 	if not unit_defs.has(def_id):
-		_error("Unknown unit")
+		_error("未知职业")
+		return
+	if lane < 0 or lane >= lane_count:
+		_error("路线无效")
 		return
 
 	var def: Dictionary
 	if team == PLAYER:
 		if economy_enabled and not _unit_unlocked(def_id):
-			_error("Unit locked")
+			_error("职业尚未解锁")
 			return
 		def = _effective_def(def_id)
 	else:
@@ -398,14 +424,14 @@ func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false, is_t
 		var cost := int(def.get("cost", 0))
 		var pop := int(def.get("pop", 1))
 		if gold < cost:
-			_error("Not enough gold")
+			_error("金币不足")
 			return
 		if get_pop_used() + pop > pop_max:
-			_error("Recruitment cap reached")
+			_error("已达招募上限")
 			return
 		var cd := float(spawn_cd[lane].get(def_id, 0.0))
 		if cd > 0.0:
-			_error("Unit on cooldown")
+			_error("该职业仍在冷却")
 			return
 		gold -= cost
 		gold_spent_units += cost
@@ -413,7 +439,7 @@ func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false, is_t
 		var guild_id := String(def.get("guild", ""))
 		guild_usage[guild_id] = int(guild_usage.get(guild_id, 0)) + 1
 
-	var spawn_x := player_base_x + 12.0 if team == PLAYER else enemy_base_x - 12.0
+	var spawn_x := map_data.spawn_x(lane, team)
 	var unit := SimUnit.new(next_id, team, lane, def_id, def, spawn_x, elite, is_target)
 	unit.spawn_wave = wave_number
 	unit.slot = _next_slot(team, lane)
@@ -441,7 +467,7 @@ func _update_waves() -> void:
 		if float(wave.get("time", 0.0)) > elapsed:
 			break
 		_spawn_wave(wave, next_wave_index + 1)
-		wave_message = String(wave.get("message", ""))
+		wave_message = _preferred_text(wave, "message_cn", "message")
 		message_timer = 4.0
 		next_wave_index += 1
 
@@ -470,7 +496,7 @@ func _update_endless(dt: float) -> void:
 	endless_wave += 1
 	_spawn_endless_wave(endless_wave)
 	endless_timer = maxf(8.0, 18.0 - endless_wave * 0.5)
-	wave_message = "Endless wave %d" % endless_wave
+	wave_message = "无尽第 %d 波" % endless_wave
 	message_timer = 3.0
 
 
@@ -504,6 +530,7 @@ func _spawn_endless_wave(wave_number: int) -> void:
 		spawned += 1
 	if spawned == 0:
 		_spawn_unit(ENEMY, 0, "swordsman", false, false)
+
 
 
 func _next_slot(team: int, lane: int) -> int:
@@ -912,14 +939,17 @@ func _catalog() -> Array:
 			elif mult < 1.0:
 				weak_vs.append(armor)
 		var unlocked := _unit_unlocked(def_id)
-		var requirement := "" if unlocked else "%s T%d" % [String(guild_defs.get(guild_id, {}).get("short", guild_id)), tier_needed]
+		var guild_short := String(guild_defs.get(guild_id, {}).get("short_cn", guild_defs.get(guild_id, {}).get("short", guild_id)))
+		var requirement := "" if unlocked else "%s关系%d" % [guild_short, tier_needed]
 		if not _guild_is_unlocked(guild_id):
-			requirement = "GUILD LOCK"
+			requirement = "协会未开放"
+		elif int(guild_tier.get(guild_id, -1)) < 0:
+			requirement = "需先建交"
 		result.append({
 			"id": def_id,
-			"name": String(base.get("display_name", def_id)),
+			"name": String(base.get("display_name_cn", base.get("display_name", def_id))),
 			"guild": guild_id,
-			"guild_name": String(guild_defs.get(guild_id, {}).get("short", guild_id)),
+			"guild_name": guild_short,
 			"role": String(base.get("role", "")),
 			"tier": tier_needed,
 			"cost": int(effective.get("cost", 0)),
@@ -951,22 +981,27 @@ func _guild_snapshot() -> Array:
 		var next_cost := 0
 		var next_cap := 0
 		var next_units: Array = []
+		var next_unit_names: Array = []
 		var next_rank_gate := 0
 		if next_tier < tiers.size():
 			next_cost = int(tiers[next_tier].get("cost", 0))
 			next_cap = int(tiers[next_tier].get("cap", 0))
 			next_units = tiers[next_tier].get("units", [])
 			next_rank_gate = int(tiers[next_tier].get("rank_gate", 0))
+			for unit_id in next_units:
+				var unit_def: Dictionary = unit_defs.get(String(unit_id), {})
+				next_unit_names.append(String(unit_def.get("display_name_cn", unit_def.get("display_name", unit_id))))
 		result.append({
 			"id": guild_id,
-			"name": String(guild.get("name", guild_id)),
-			"short": String(guild.get("short", guild_id)),
+			"name": String(guild.get("name_cn", guild.get("name", guild_id))),
+			"short": String(guild.get("short_cn", guild.get("short", guild_id))),
 			"unlocked": _guild_is_unlocked(guild_id),
 			"tier": tier,
 			"max_tier": tiers.size() - 1,
 			"next_cost": next_cost,
 			"next_cap": next_cap,
 			"next_units": next_units,
+			"next_unit_names": next_unit_names,
 			"rank_gate": next_rank_gate,
 			"can_afford": economy_enabled and next_tier < tiers.size() and gold >= next_cost,
 			"favor": int(guild_favor.get(guild_id, 0)),
@@ -980,6 +1015,9 @@ func get_snapshot() -> Dictionary:
 	for u in units:
 		if not u.alive:
 			continue
+		var unit_guild := String(u.def.get("guild", ""))
+		var guild_def: Dictionary = guild_defs.get(unit_guild, {})
+		var guild_name := String(guild_def.get("short_cn", guild_def.get("short", unit_guild)))
 		unit_data.append({
 			"id": u.id,
 			"team": u.team,
@@ -988,7 +1026,12 @@ func get_snapshot() -> Dictionary:
 			"hp": u.hp,
 			"max_hp": u.max_hp,
 			"def_id": u.def_id,
+			"name": String(u.def.get("display_name_cn", u.def.get("display_name", u.def_id))),
+			"guild": unit_guild,
+			"guild_name": guild_name,
+			"role": String(u.def.get("role", "")),
 			"attack_type": u.attack_type,
+			"armor_type": u.armor_type,
 			"state": u.state,
 			"slot": u.slot,
 			"target_id": u.target_id,
@@ -1022,10 +1065,14 @@ func get_snapshot() -> Dictionary:
 		"stars": get_stars(),
 		"player_base_x": player_base_x,
 		"enemy_base_x": enemy_base_x,
+		"player_base_name": map_data.base_name(PLAYER),
+		"enemy_base_name": map_data.base_name(ENEMY),
 		"lane_count": lane_count,
-		"world_width": 1600.0,
+		"world_width": world_width,
+		"world_height": world_height,
+		"map": map_data.to_snapshot(),
 		"advance_lines": advance_lines.duplicate(),
-		"level_name": String(level.get("name", "Sandbox")),
+		"level_name": String(level.get("name_cn", level.get("name", "沙盒"))),
 		"contract": int(level.get("contract", 0)),
 		"brief": String(level.get("brief", "")),
 		"gold": int(floor(gold)),
@@ -1040,6 +1087,7 @@ func get_snapshot() -> Dictionary:
 		"next_wave_preview": _next_wave_preview(),
 		"result_stats": _result_stats(),
 		"rep_rank": rep_rank,
+		"max_rank": promo_kills.size(),
 		"promo_kills": int(promo_kills[rep_rank]) if rep_rank < promo_kills.size() else 0,
 		"promo_cost": int(promo_cost[rep_rank]) if rep_rank < promo_cost.size() else 0,
 		"catalog": _catalog(),

@@ -5,6 +5,7 @@
   "name_cn": "旧驿道：失踪商队",
   "brief": "Three caravans vanished on the same stretch of road. Verdant Lodge will lend you archers, but first prove you are worth their trust.",
   "brief_cn": "商队在同一段驿道消失了三次。绿荫游侠团愿意借你弓手，但先证明你值得合作。",
+  "map": "res://data/maps/greyhaven_road.json",
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
@@ -19,11 +20,13 @@
     "verdant"
   ],
   "intro_message": "Press B to contact Verdant Lodge. Archers and rogues answer Red Banner's ambushes.",
+  "intro_message_cn": "按 B 与绿荫游侠团建交。用弓手与盗贼反制赤旗团的伏击。",
   "waves": [
     {
       "time": 20,
       "lane": 0,
       "message": "Wave 1: ambush screen",
+      "message_cn": "第 1 波：伏击前哨",
       "spawns": [
         {
           "unit": "swordsman",
@@ -45,6 +48,7 @@
       "time": 70,
       "lane": 0,
       "message": "Wave 2: arrows from the trees",
+      "message_cn": "第 2 波：林间箭雨",
       "spawns": [
         {
           "unit": "archer",
@@ -66,6 +70,7 @@
       "time": 120,
       "lane": 0,
       "message": "Wave 3: flankers",
+      "message_cn": "第 3 波：侧翼包抄",
       "spawns": [
         {
           "unit": "swordsman",
@@ -87,6 +92,7 @@
       "time": 170,
       "lane": 0,
       "message": "Wave 4: the quartermaster",
+      "message_cn": "第 4 波：军需官",
       "spawns": [
         {
           "unit": "swordsman",
@@ -111,6 +117,7 @@
       "time": 220,
       "lane": 0,
       "message": "Wave 5: caravan road",
+      "message_cn": "第 5 波：商队驿道",
       "spawns": [
         {
           "unit": "swordsman",

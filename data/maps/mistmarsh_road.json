@@ -1,0 +1,78 @@
+{
+	"version": 1,
+	"id": "mistmarsh_road",
+	"name": "Mistmarsh Hunting Trail",
+	"name_cn": "雾沼猎径",
+	"world": {
+		"width": 1600.0,
+		"height": 360.0
+	},
+	"bases": [
+		{
+			"id": "player",
+			"team": 0,
+			"name": "Grey Crow Camp",
+			"name_cn": "灰鸦营地",
+			"x": 80.0
+		},
+		{
+			"id": "enemy",
+			"team": 1,
+			"name": "Red Banner Camp",
+			"name_cn": "赤旗猎场",
+			"x": 1520.0
+		}
+	],
+	"routes": [
+		{
+			"id": 0,
+			"name": "Marsh North",
+			"name_cn": "雾沼北路",
+			"y": 104.0,
+			"player_spawn_x": 92.0,
+			"enemy_spawn_x": 1508.0,
+			"segments": [
+				{
+					"from": 80.0,
+					"to": 680.0,
+					"width": 72.0
+				},
+				{
+					"from": 680.0,
+					"to": 1040.0,
+					"width": 56.0
+				},
+				{
+					"from": 1040.0,
+					"to": 1520.0,
+					"width": 72.0
+				}
+			]
+		},
+		{
+			"id": 1,
+			"name": "Marsh South",
+			"name_cn": "雾沼南路",
+			"y": 252.0,
+			"player_spawn_x": 92.0,
+			"enemy_spawn_x": 1508.0,
+			"segments": [
+				{
+					"from": 80.0,
+					"to": 560.0,
+					"width": 64.0
+				},
+				{
+					"from": 560.0,
+					"to": 1080.0,
+					"width": 88.0
+				},
+				{
+					"from": 1080.0,
+					"to": 1520.0,
+					"width": 64.0
+				}
+			]
+		}
+	]
+}

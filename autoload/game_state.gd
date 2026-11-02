@@ -15,6 +15,7 @@ var selected_contract: int = 1
 var endless_mode: bool = false
 var settings: Dictionary = {"ui_scale": 1.0}
 var tutorial_seen: bool = false
+var map_editor_auto_opened: bool = false
 var save_service_override: Node = null
 
 
@@ -220,8 +221,8 @@ func record_endless(score: int, waves: int) -> void:
 func guild_bonus_text(guild_id: String) -> String:
 	var favor := int(guild_favor.get(guild_id, 0))
 	if favor <= 0:
-		return "no favor yet"
-	return "+%d%% stats  -%.1f%% cost" % [favor, favor * 0.5]
+		return "暂无"
+	return "属性 +%.1f%% · 费用 -%.1f%%" % [favor * 1.0, favor * 0.5]
 
 
 func reset_progress() -> void:

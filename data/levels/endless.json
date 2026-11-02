@@ -5,6 +5,7 @@
   "name_cn": "无尽悬赏",
   "brief": "The guilds keep sending bounties. Hold the road and score as long as you can.",
   "brief_cn": "协会不断送来悬赏。守住路口，活得越久，名声越响。",
+  "map": "res://data/maps/mistmarsh_road.json",
   "mode": "endless",
   "base_hp": 20,
   "base_damage": 1,
@@ -12,5 +13,6 @@
   "stipend": 3.0,
   "available_guilds": ["iron", "verdant", "arcane"],
   "intro_message": "Endless bounties. Hold both lanes; score = waves + kills + base.",
+  "intro_message_cn": "无尽悬赏。守住两路；得分 = 波数 + 击杀 + 剩余基地。",
   "waves": []
 }

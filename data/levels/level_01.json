@@ -5,6 +5,7 @@
   "name_cn": "灰港外环：收税人",
   "brief": "Red Banner 'tax collectors' are burning the outer farms. Iron Oath gives you your first real contract: drive them out of the wheat.",
   "brief_cn": "赤旗团以收税为名洗劫外环村落。铁誓会给你第一份正式委托：把他们赶出麦田。",
+  "map": "res://data/maps/greyhaven_road.json",
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
@@ -18,11 +19,13 @@
     "iron"
   ],
   "intro_message": "Press B, contact Iron Oath, then hold the line. Kill marked targets for fame.",
+  "intro_message_cn": "按 B 打开协会，与铁誓会建交，然后守住道路。击杀金色悬赏目标可提升名望。",
   "waves": [
 	{
 	  "time": 20,
 	  "lane": 0,
 	  "message": "Wave 1: Red Banner swords",
+	  "message_cn": "第 1 波：赤旗剑士",
 	  "spawns": [
 		{
 		  "unit": "swordsman",
@@ -39,6 +42,7 @@
 	  "time": 65,
 	  "lane": 0,
 	  "message": "Wave 2: shields and spears",
+	  "message_cn": "第 2 波：盾与矛",
 	  "spawns": [
 		{
 		  "unit": "swordsman",
@@ -59,6 +63,7 @@
 	  "time": 115,
 	  "lane": 0,
 	  "message": "Wave 3: the tax captain",
+	  "message_cn": "第 3 波：收税队长",
 	  "spawns": [
 		{
 		  "unit": "swordsman",
@@ -80,6 +85,7 @@
 	  "time": 170,
 	  "lane": 0,
 	  "message": "Wave 4: both lanes",
+	  "message_cn": "第 4 波：两路齐攻",
 	  "spawns": [
 		{
 		  "unit": "swordsman",

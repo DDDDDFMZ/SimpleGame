@@ -16,6 +16,8 @@ var balance: Dictionary = {}
 var counters: Dictionary = {}
 var campaign: Dictionary = {}
 var level_paths: Dictionary = {}
+var level_defs: Dictionary = {}
+var map_defs: Dictionary = {}
 var unlock_guilds: Array = []
 var endless_path: String = ""
 var errors: Array = []
@@ -30,6 +32,8 @@ func load_all() -> bool:
 	balance.clear()
 	counters.clear()
 	level_paths.clear()
+	level_defs.clear()
+	map_defs.clear()
 	unlock_guilds.clear()
 
 	_load_units()
@@ -37,6 +41,7 @@ func load_all() -> bool:
 	_load_balance()
 	_load_counters()
 	_load_campaign()
+	_load_maps()
 	_validate()
 
 	if not errors.is_empty():
@@ -86,6 +91,7 @@ func _load_units() -> void:
 			"id": def_id,
 			"name_key": String(row.get("name_key", "")),
 			"display_name": String(row.get("display_name", def_id)),
+			"display_name_cn": String(row.get("display_name_cn", row.get("display_name", def_id))),
 			"guild": String(row.get("guild", "")),
 			"relation_tier": int(row.get("relation_tier", "0")),
 			"role": String(row.get("role", "")),
@@ -130,7 +136,9 @@ func _load_guilds() -> void:
 		guild_defs[guild_id] = {
 			"id": guild_id,
 			"name": String(row.get("name", guild_id)),
+			"name_cn": String(row.get("name_cn", row.get("name", guild_id))),
 			"short": String(row.get("short", guild_id)),
+			"short_cn": String(row.get("short_cn", row.get("short", guild_id))),
 			"unlock_after": int(row.get("unlock_after", "0")),
 			"sort_order": int(row.get("sort_order", "0")),
 			"tiers": [],
@@ -241,6 +249,51 @@ func _load_campaign() -> void:
 		errors.append("%s: endless path missing %s" % [CAMPAIGN_PATH, endless_path])
 
 
+func _load_maps() -> void:
+	var level_files: Array = []
+	for level_path in level_paths.values():
+		level_files.append(String(level_path))
+	if endless_path != "":
+		level_files.append(endless_path)
+	for level_path in level_files:
+		if level_defs.has(level_path):
+			continue
+		var level := _read_json(level_path)
+		level_defs[level_path] = level
+		if level.is_empty():
+			errors.append("%s: level JSON invalid or empty" % level_path)
+			continue
+		var map_path := String(level.get("map", ""))
+		if map_path == "":
+			errors.append("%s: level has no map path" % level_path)
+			continue
+		if map_defs.has(map_path):
+			continue
+		var map := MapData.load_file(map_path)
+		map_defs[map_path] = map
+		for map_error in map.errors:
+			errors.append("%s: %s" % [map_path, String(map_error)])
+
+
+func map_for_level(level: Dictionary) -> MapData:
+	var map_path := String(level.get("map", ""))
+	if map_path == "":
+		return MapData.new()
+	if map_defs.has(map_path):
+		return map_defs[map_path]
+	var map := MapData.load_file(map_path)
+	map_defs[map_path] = map
+	return map
+
+
+func _read_json(path: String) -> Dictionary:
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		return {}
+	var parsed: Variant = JSON.parse_string(text)
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+
+
 func _validate() -> void:
 	var valid_attack := ["melee", "ranged", "siege"]
 	var valid_armor := ["light", "heavy"]
@@ -273,6 +326,8 @@ func _validate() -> void:
 	]:
 		if not balance.has(required):
 			errors.append("%s: missing key %s" % [BALANCE_PATH, required])
+	if map_defs.is_empty():
+		errors.append("没有加载任何地图")
 
 
 func _bool(text: String) -> bool:
@@ -292,3 +347,15 @@ func get_max_contract() -> int:
 	for contract in level_paths:
 		maximum = maxi(maximum, int(contract))
 	return maximum
+
+
+func get_map_count() -> int:
+	return map_defs.size()
+
+
+func get_map_for_path(path: String) -> MapData:
+	if map_defs.has(path):
+		return map_defs[path]
+	var map := MapData.load_file(path)
+	map_defs[path] = map
+	return map

@@ -33,6 +33,7 @@ func _ready() -> void:
 	hud.drag_finished.connect(_on_drag_finished)
 	hud.world_right_click.connect(_on_world_right_click)
 	hud.result_action.connect(_on_result_action)
+	hud.selection_changed.connect(_on_hud_selection_changed)
 	_reset_and_start()
 
 
@@ -57,10 +58,12 @@ func _reset_and_start() -> void:
 	view.reset_view()
 	view.set_active_lane(active_lane)
 	view.set_selected(selected_ids)
+	camera.set_world_width(sim.world_width)
 	camera.jump_to(CAMERA_DEFAULT_X)
 	hud.close_panel()
 	hud.set_guide(false)
 	hud.set_paused(false)
+	hud.set_selection(selected_ids)
 	hud.set_camera(camera.camera_x(), follow_camera)
 	hud.update_snapshot(sim.get_snapshot(), active_lane)
 
@@ -82,6 +85,7 @@ func _on_ticked(snapshot: Dictionary) -> void:
 	if follow_camera:
 		camera.focus_lane(snapshot, active_lane)
 	hud.set_camera(camera.camera_x(), follow_camera)
+	hud.set_selection(selected_ids)
 	hud.update_snapshot(snapshot, active_lane)
 
 	if bool(snapshot.get("finished", false)) and not result_recorded:
@@ -174,7 +178,7 @@ func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
 			if int(u.get("team", 1)) != BattleSim.PLAYER:
 				continue
 			var lane := clampi(int(u.get("lane", 0)), 0, 1)
-			var pos := Vector2(float(u.get("x", 0.0)), BattleView.LANE_Y[lane])
+			var pos := Vector2(float(u.get("x", 0.0)), view.lane_y(lane))
 			if rect.has_point(pos):
 				var id := int(u.get("id", -1))
 				if id >= 0 and not selected_ids.has(id):
@@ -189,7 +193,7 @@ func _select_at(world_pos: Vector2, additive: bool, snapshot: Dictionary) -> voi
 		if int(u.get("team", 1)) != BattleSim.PLAYER:
 			continue
 		var lane := clampi(int(u.get("lane", 0)), 0, 1)
-		var pos := Vector2(float(u.get("x", 0.0)), BattleView.LANE_Y[lane])
+		var pos := Vector2(float(u.get("x", 0.0)), view.lane_y(lane))
 		var dist := pos.distance_to(world_pos)
 		if dist <= 24.0 and dist < best_dist:
 			best_dist = dist
@@ -227,6 +231,20 @@ func _clean_selection(snapshot: Dictionary) -> void:
 
 func _update_selection_view() -> void:
 	view.set_selected(selected_ids)
+	hud.set_selection(selected_ids)
+
+
+func _on_hud_selection_changed(ids: Array) -> void:
+	var valid := {}
+	for u in sim.get_snapshot().get("units", []):
+		if int(u.get("team", 1)) == BattleSim.PLAYER:
+			valid[int(u.get("id", -1))] = true
+	var filtered: Array = []
+	for id in ids:
+		if valid.has(int(id)) and not filtered.has(int(id)):
+			filtered.append(int(id))
+	selected_ids = filtered
+	_update_selection_view()
 
 
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
@@ -270,6 +288,10 @@ func _on_result_action(action: String) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+
+	if hud.guide_open and (event.keycode == KEY_LEFT or event.keycode == KEY_RIGHT):
+		hud.change_guide_page(-1 if event.keycode == KEY_LEFT else 1)
 		return
 
 	match event.keycode:
