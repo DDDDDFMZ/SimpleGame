@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "levels": [
+    {"contract": 1, "path": "res://data/levels/level_01.json"},
+    {"contract": 2, "path": "res://data/levels/level_02.json"},
+    {"contract": 3, "path": "res://data/levels/level_03.json"}
+  ],
+  "unlock_guilds": [
+    {"after_contract": 1, "guild": "verdant"},
+    {"after_contract": 2, "guild": "arcane"}
+  ],
+  "endless": {
+    "after_contract": 3,
+    "path": "res://data/levels/endless.json"
+  }
+}

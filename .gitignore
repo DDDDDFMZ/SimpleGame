@@ -14,5 +14,10 @@ Thumbs.db
 *.tmp
 *.log
 
-# Local tools (portable Godot etc.)
-tools/
+# Local portable tools (not project tools)
+tools/godot/
+tools/gh/
+
+# Temporary debug scripts
+tests/debug_*.gd
+tests/debug_*.gd.uid

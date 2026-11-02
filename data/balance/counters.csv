@@ -1,0 +1,4 @@
+attack_type,light,heavy,notes
+melee,1.5,0.75,
+ranged,1.0,1.0,
+siege,0.5,1.5,

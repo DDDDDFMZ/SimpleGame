@@ -8,7 +8,7 @@
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
-  "starting_gold": 200,
+  "starting_gold": 220,
   "stipend": 6.0,
   "star_thresholds": [
     12,
@@ -49,11 +49,11 @@
       "spawns": [
         {
           "unit": "knight",
-          "count": 2
+          "count": 1
         },
         {
           "unit": "archer",
-          "count": 3,
+          "count": 2,
           "lane": 1
         },
         {
@@ -70,11 +70,11 @@
       "spawns": [
         {
           "unit": "mage",
-          "count": 2
+          "count": 1
         },
         {
           "unit": "swordsman",
-          "count": 4,
+          "count": 3,
           "lane": 1
         },
         {
@@ -91,11 +91,11 @@
       "spawns": [
         {
           "unit": "rogue",
-          "count": 3
+          "count": 1
         },
         {
           "unit": "archer",
-          "count": 3,
+          "count": 2,
           "lane": 1
         },
         {
@@ -113,15 +113,15 @@
       "spawns": [
         {
           "unit": "knight",
-          "count": 3
+          "count": 1
         },
         {
           "unit": "mage",
-          "count": 2
+          "count": 1
         },
         {
           "unit": "archer",
-          "count": 4,
+          "count": 2,
           "lane": 1
         },
         {
@@ -138,7 +138,7 @@
       "spawns": [
         {
           "unit": "swordsman",
-          "count": 4
+          "count": 3
         },
         {
           "unit": "mage",
@@ -146,7 +146,7 @@
         },
         {
           "unit": "archer",
-          "count": 3,
+          "count": 2,
           "lane": 1
         },
         {

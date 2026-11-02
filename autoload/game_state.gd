@@ -2,10 +2,9 @@ extends Node
 
 signal progress_changed
 
-const GUILD_ORDER := ["iron", "verdant", "arcane"]
-const MAX_CONTRACT := 3
 const FAVOR_CAP := 10
 
+var game_data: GameData
 var unlocked_contracts: Array = [1]
 var stars: Dictionary = {}
 var unlocked_guilds: Array = ["iron"]
@@ -20,16 +19,33 @@ var save_service_override: Node = null
 
 
 func _ready() -> void:
+	_ensure_data()
 	_load()
 
 
+func _ensure_data() -> void:
+	if game_data == null:
+		game_data = GameData.new()
+		game_data.load_all()
+
+
 func _defaults() -> Dictionary:
+	_ensure_data()
+	var favor := {}
+	var starting_guilds: Array = []
+	if game_data != null:
+		for guild_id in game_data.guild_order:
+			favor[guild_id] = 0
+			if int(game_data.guild_defs[guild_id].get("unlock_after", 0)) == 0:
+				starting_guilds.append(guild_id)
+	if starting_guilds.is_empty():
+		starting_guilds = ["iron"]
 	return {
 		"version": 2,
 		"unlocked_contracts": [1],
 		"stars": {},
-		"unlocked_guilds": ["iron"],
-		"guild_favor": {"iron": 0, "verdant": 0, "arcane": 0},
+		"unlocked_guilds": starting_guilds,
+		"guild_favor": favor if not favor.is_empty() else {"iron": 0},
 		"best_endless": {"score": 0, "waves": 0},
 		"endless_unlocked": false,
 		"settings": {"ui_scale": 1.0},
@@ -44,6 +60,7 @@ func _save_service() -> Node:
 
 
 func _load() -> void:
+	_ensure_data()
 	var save_service := _save_service()
 	var loaded: Dictionary = save_service.load_game() if save_service != null else {}
 	if loaded.is_empty():
@@ -67,7 +84,8 @@ func _load() -> void:
 	settings = loaded.get("settings", {"ui_scale": 1.0})
 	tutorial_seen = bool(loaded.get("tutorial_seen", false))
 
-	for guild_id in GUILD_ORDER:
+	var order: Array = game_data.guild_order if game_data != null else ["iron"]
+	for guild_id in order:
 		if not guild_favor.has(guild_id):
 			guild_favor[guild_id] = 0
 	progress_changed.emit()
@@ -109,7 +127,34 @@ func profile() -> Dictionary:
 	}
 
 
+func get_level_path(contract_id: int) -> String:
+	_ensure_data()
+	return game_data.get_level_path(contract_id) if game_data != null else ""
+
+
+func get_contracts() -> Array:
+	_ensure_data()
+	if game_data == null:
+		return [1, 2, 3]
+	var contracts: Array = []
+	for contract in game_data.level_paths:
+		contracts.append(int(contract))
+	contracts.sort()
+	return contracts
+
+
+func get_max_contract() -> int:
+	_ensure_data()
+	return game_data.get_max_contract() if game_data != null else 3
+
+
+func get_endless_path() -> String:
+	return game_data.endless_path if game_data != null else ""
+
+
 func select_contract(contract_id: int) -> bool:
+	if contract_id > get_max_contract():
+		return false
 	if not is_contract_unlocked(contract_id):
 		return false
 	selected_contract = contract_id
@@ -125,27 +170,32 @@ func select_endless() -> bool:
 
 
 func record_result(contract_id: int, earned_stars: int, usage: Dictionary) -> void:
+	_ensure_data()
 	if earned_stars <= 0:
 		return
 	var key := str(contract_id)
 	var old_stars := int(stars.get(key, 0))
 	stars[key] = maxi(old_stars, earned_stars)
 
+	var max_contract := game_data.get_max_contract() if game_data != null else 3
 	var next_contract := contract_id + 1
-	if next_contract <= MAX_CONTRACT and not unlocked_contracts.has(next_contract):
+	if next_contract <= max_contract and not unlocked_contracts.has(next_contract):
 		unlocked_contracts.append(next_contract)
 		unlocked_contracts.sort()
 
-	if contract_id == 1 and not unlocked_guilds.has("verdant"):
-		unlocked_guilds.append("verdant")
-	if contract_id == 2 and not unlocked_guilds.has("arcane"):
-		unlocked_guilds.append("arcane")
-	if contract_id >= MAX_CONTRACT and earned_stars > 0:
+	if game_data != null:
+		for unlock in game_data.unlock_guilds:
+			if int(unlock.get("after_contract", 0)) <= contract_id:
+				var guild_id := String(unlock.get("guild", ""))
+				if guild_id != "" and not unlocked_guilds.has(guild_id):
+					unlocked_guilds.append(guild_id)
+	if contract_id >= max_contract and earned_stars > 0:
 		endless_unlocked = true
 
 	# Award favor only when the best star result improves, so retries cannot farm it.
 	if earned_stars > old_stars:
-		for guild_id in GUILD_ORDER:
+		var guild_order: Array = game_data.guild_order if game_data != null else ["iron"]
+		for guild_id in guild_order:
 			var used := int(usage.get(guild_id, 0))
 			if used <= 0:
 				continue

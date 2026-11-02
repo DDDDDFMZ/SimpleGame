@@ -1,10 +1,5 @@
 extends Control
 
-const LEVEL_PATHS := [
-	"res://data/levels/level_01.json",
-	"res://data/levels/level_02.json",
-	"res://data/levels/level_03.json",
-]
 const VIEW_W := 640.0
 const VIEW_H := 360.0
 const CARD_Y := 82.0
@@ -16,6 +11,7 @@ const GUILD_CN := {"iron": "铁誓会", "verdant": "绿荫游侠团", "arcane": 
 
 var font: Font
 var levels: Array = []
+var contract_ids: Array = []
 var message: String = ""
 
 
@@ -24,8 +20,9 @@ func _ready() -> void:
 	var system_font := SystemFont.new()
 	system_font.font_names = PackedStringArray(["Microsoft YaHei", "Noto Sans CJK SC", "SimHei"])
 	font = system_font
-	for path in LEVEL_PATHS:
-		levels.append(_load_json(path))
+	for contract in GameState.get_contracts():
+		contract_ids.append(int(contract))
+		levels.append(_load_json(GameState.get_level_path(int(contract))))
 	queue_redraw()
 
 
@@ -132,7 +129,7 @@ func _gui_input(event: InputEvent) -> void:
 	var pos: Vector2 = event.position
 	for i in range(levels.size()):
 		if _card_rect(i).has_point(pos):
-			_start_contract(i + 1)
+			_start_contract(int(contract_ids[i]))
 			accept_event()
 			return
 	if ENDLESS_RECT.has_point(pos):
@@ -145,7 +142,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	match event.keycode:
 		KEY_1, KEY_2, KEY_3:
-			_start_contract(event.keycode - KEY_1 + 1)
+			var index: int = event.keycode - KEY_1
+			if index >= 0 and index < contract_ids.size():
+				_start_contract(int(contract_ids[index]))
 		KEY_E:
 			_start_endless()
 		KEY_ESCAPE:

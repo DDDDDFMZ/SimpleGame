@@ -11,91 +11,91 @@
   "starting_gold": 200,
   "stipend": 6.0,
   "star_thresholds": [
-    12,
-    18
+	12,
+	18
   ],
   "available_guilds": [
     "iron"
   ],
   "intro_message": "Press B, contact Iron Oath, then hold the line. Kill marked targets for fame.",
   "waves": [
-    {
-      "time": 20,
-      "lane": 0,
-      "message": "Wave 1: Red Banner swords",
-      "spawns": [
-        {
-          "unit": "swordsman",
-          "count": 3
-        },
-        {
-          "unit": "swordsman",
-          "count": 1,
-          "target": true
-        }
-      ]
-    },
-    {
-      "time": 65,
-      "lane": 0,
-      "message": "Wave 2: shields and spears",
-      "spawns": [
-        {
-          "unit": "swordsman",
-          "count": 4
-        },
-        {
-          "unit": "spearman",
-          "count": 3
-        },
-        {
-          "unit": "spearman",
-          "count": 1,
-          "target": true
-        }
-      ]
-    },
-    {
-      "time": 115,
-      "lane": 0,
-      "message": "Wave 3: the tax captain",
-      "spawns": [
-        {
-          "unit": "swordsman",
-          "count": 5
-        },
-        {
-          "unit": "spearman",
-          "count": 4
-        },
-        {
-          "unit": "swordsman",
-          "count": 1,
-          "target": true,
-          "elite": true
-        }
-      ]
-    },
-    {
-      "time": 170,
-      "lane": 0,
-      "message": "Wave 4: both lanes",
-      "spawns": [
-        {
-          "unit": "swordsman",
-          "count": 6
-        },
-        {
-          "unit": "spearman",
-          "count": 4,
-          "lane": 1
-        },
-        {
-          "unit": "swordsman",
-          "count": 1,
-          "target": true
-        }
-      ]
-    }
+	{
+	  "time": 20,
+	  "lane": 0,
+	  "message": "Wave 1: Red Banner swords",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 3
+		},
+		{
+		  "unit": "swordsman",
+		  "count": 1,
+		  "target": true
+		}
+	  ]
+	},
+	{
+	  "time": 65,
+	  "lane": 0,
+	  "message": "Wave 2: shields and spears",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 4
+		},
+		{
+		  "unit": "spearman",
+		  "count": 3
+		},
+		{
+		  "unit": "spearman",
+		  "count": 1,
+		  "target": true
+		}
+	  ]
+	},
+	{
+	  "time": 115,
+	  "lane": 0,
+	  "message": "Wave 3: the tax captain",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 5
+		},
+		{
+		  "unit": "spearman",
+		  "count": 4
+		},
+		{
+		  "unit": "swordsman",
+		  "count": 1,
+		  "target": true,
+		  "elite": true
+		}
+	  ]
+	},
+	{
+	  "time": 170,
+	  "lane": 0,
+	  "message": "Wave 4: both lanes",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 6
+		},
+		{
+		  "unit": "spearman",
+		  "count": 4,
+		  "lane": 1
+		},
+		{
+		  "unit": "swordsman",
+		  "count": 1,
+		  "target": true
+		}
+	  ]
+	}
   ]
 }

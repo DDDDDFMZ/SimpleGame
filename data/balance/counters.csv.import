@@ -1,0 +1,9 @@
+[remap]
+
+importer="keep"
+type=""
+
+[deps]
+
+source_file="res://data/balance/counters.csv"
+dest_files=[]

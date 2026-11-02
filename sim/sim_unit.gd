@@ -29,6 +29,7 @@ var charge_used: bool = false
 var stationary_time: float = 0.0
 var is_elite: bool = false
 var is_target: bool = false
+var spawn_wave: int = 0
 var manual_order: bool = false
 var move_target_x: float = 0.0
 var hold_position: bool = false

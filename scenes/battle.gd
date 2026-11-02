@@ -1,10 +1,5 @@
 extends Node2D
 
-const LEVEL_PATHS := {
-	1: "res://data/levels/level_01.json",
-	2: "res://data/levels/level_02.json",
-	3: "res://data/levels/level_03.json",
-}
 const SEED := 12345
 const UNIT_ORDER := ["swordsman", "spearman", "knight", "archer", "rogue", "catapult", "mage", "cleric"]
 const CAMERA_DEFAULT_X := 320.0
@@ -21,6 +16,7 @@ var follow_camera: bool = true
 var selected_ids: Array = []
 var drag_world_start := Vector2.ZERO
 var result_recorded := false
+var paused_before_guide: bool = false
 
 
 func _ready() -> void:
@@ -41,22 +37,7 @@ func _ready() -> void:
 
 
 func _load_level() -> Dictionary:
-	if GameState.endless_mode:
-		return {
-			"id": "endless",
-			"contract": 0,
-			"name": "Endless Bounties",
-			"brief_cn": "协会不断送来悬赏。守住路口，赚取名声。",
-			"mode": "endless",
-			"base_hp": 20,
-			"base_damage": 1,
-			"starting_gold": 180,
-			"stipend": 3.0,
-			"available_guilds": ["iron", "verdant", "arcane"],
-			"waves": [],
-		}
-	var contract := clampi(GameState.selected_contract, 1, 3)
-	var path: String = LEVEL_PATHS[contract]
+	var path := GameState.get_endless_path() if GameState.endless_mode else GameState.get_level_path(GameState.selected_contract)
 	var text := FileAccess.get_file_as_string(path)
 	if text.is_empty():
 		push_error("Cannot read level: " + path)
@@ -71,13 +52,14 @@ func _reset_and_start() -> void:
 	follow_camera = true
 	selected_ids.clear()
 	result_recorded = false
-	sim = BattleSim.new(SEED, 20, 1, level_data, true, GameState.profile())
+	sim = BattleSim.new(SEED, 20, 1, level_data, true, GameState.profile(), GameState.game_data)
 	runner.setup(sim)
 	view.reset_view()
 	view.set_active_lane(active_lane)
 	view.set_selected(selected_ids)
 	camera.jump_to(CAMERA_DEFAULT_X)
 	hud.close_panel()
+	hud.set_guide(false)
 	hud.set_paused(false)
 	hud.set_camera(camera.camera_x(), follow_camera)
 	hud.update_snapshot(sim.get_snapshot(), active_lane)
@@ -277,8 +259,8 @@ func _on_result_action(action: String) -> void:
 			if GameState.endless_mode:
 				get_tree().change_scene_to_file("res://main/level_select.tscn")
 				return
-			var next_contract := clampi(GameState.selected_contract + 1, 1, 3)
-			if GameState.selected_contract < 3 and GameState.select_contract(next_contract):
+			var next_contract := GameState.selected_contract + 1
+			if GameState.selected_contract < GameState.get_max_contract() and GameState.select_contract(next_contract):
 				_reset_and_start()
 			else:
 				get_tree().change_scene_to_file("res://main/level_select.tscn")
@@ -313,6 +295,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			if follow_camera and sim != null:
 				camera.focus_lane(sim.get_snapshot(), active_lane)
 			hud.set_camera(camera.camera_x(), follow_camera)
+		KEY_F1:
+			if not hud.guide_open:
+				paused_before_guide = runner.paused
+				runner.paused = true
+			else:
+				runner.paused = paused_before_guide
+			hud.toggle_guide()
+		KEY_F2:
+			hud.toggle_checklist()
 		KEY_HOME:
 			follow_camera = false
 			camera.jump_to(CAMERA_DEFAULT_X)

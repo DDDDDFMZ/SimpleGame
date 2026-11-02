@@ -1,0 +1,13 @@
+guild_id,tier,cost,cap,rank_gate,notes
+iron,0,30,1,0,
+iron,1,60,2,0,
+iron,2,110,2,1,
+iron,3,160,1,2,
+verdant,0,30,1,0,
+verdant,1,60,2,0,
+verdant,2,110,2,1,
+verdant,3,160,1,2,
+arcane,0,30,1,0,
+arcane,1,60,2,0,
+arcane,2,110,2,1,
+arcane,3,160,1,2,

@@ -43,6 +43,12 @@ var paused: bool = false
 var camera_x: float = 320.0
 var follow_mode: bool = true
 var font: Font
+var hover_card: int = -1
+var hover_pos: Vector2 = Vector2.ZERO
+var company_seen: bool = false
+var checklist_open: bool = false
+var checklist_initialized: bool = false
+var guide_open: bool = false
 
 var drag_active: bool = false
 var minimap_drag: bool = false
@@ -63,6 +69,9 @@ func _ready() -> void:
 func update_snapshot(p_snapshot: Dictionary, p_active_lane: int) -> void:
 	snapshot = p_snapshot
 	active_lane = clampi(p_active_lane, 0, 1)
+	if not checklist_initialized and int(snapshot.get("contract", 0)) == 1:
+		checklist_open = true
+		checklist_initialized = true
 	queue_redraw()
 
 
@@ -79,6 +88,22 @@ func set_paused(value: bool) -> void:
 
 func toggle_panel() -> void:
 	panel_open = not panel_open
+	company_seen = true
+	queue_redraw()
+
+
+func toggle_checklist() -> void:
+	checklist_open = not checklist_open
+	queue_redraw()
+
+
+func toggle_guide() -> void:
+	guide_open = not guide_open
+	queue_redraw()
+
+
+func set_guide(value: bool) -> void:
+	guide_open = value
 	queue_redraw()
 
 
@@ -112,8 +137,9 @@ func _draw() -> void:
 
 	draw_string(font, Vector2(8.0, 13.0), "GOLD %d (+%.1f/s)   CAP %d/%d   BASE %d/%d   %s" % [gold, stipend, used, cap, int(hp[0]), int(snapshot.get("base_hp_max", 20)), wave_text], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#E8D5A9"))
 	var contract_text := "ENDLESS" if mode == "endless" else ("CONTRACT %d" % contract)
-	draw_string(font, Vector2(8.0, 28.0), "REP R%d   FAME %d/%d   PROMOTE %dg   TARGETS %d   %s" % [rank, fame, promo_kills, promo_cost, target_kills, contract_text], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#B8B0C8"))
-	draw_string(font, Vector2(8.0, 42.0), "1-8 recruit   B company   Q/E lane   drag select   RMB move   Shift+RMB line   F follow   Ctrl+R retry", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+	var target_total := int(snapshot.get("target_total", 0))
+	draw_string(font, Vector2(8.0, 28.0), "REP R%d   FAME %d/%d   PROMOTE %dg   TARGETS %d/%d   %s" % [rank, fame, promo_kills, promo_cost, target_kills, target_total, contract_text], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#B8B0C8"))
+	draw_string(font, Vector2(8.0, 42.0), "1-8 recruit  B company  Q/E lane  drag/RMB orders  Shift+RMB line  F1 guide  F2 steps  Ctrl+R retry", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
 	var message := String(snapshot.get("message", ""))
 	if message != "":
 		draw_string(font, Vector2(8.0, 58.0), message, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#E08A3C"))
@@ -122,6 +148,7 @@ func _draw() -> void:
 		_center_text(error, 295.0, 9, Color("#E06666"))
 
 	_draw_minimap()
+	_draw_wave_preview()
 
 	draw_rect(Rect2(0.0, BOTTOM_Y, VIEW_W, 60.0), Color(0.07, 0.06, 0.10, 0.96))
 	draw_line(Vector2(0.0, BOTTOM_Y), Vector2(VIEW_W, BOTTOM_Y), Color(0.2, 0.18, 0.26), 1.0)
@@ -134,11 +161,20 @@ func _draw() -> void:
 	if panel_open:
 		_draw_company()
 
+	if checklist_open:
+		_draw_checklist()
+
+	if hover_card >= 0 and not panel_open and not guide_open and not bool(snapshot.get("finished", false)):
+		_draw_tooltip()
+
 	if paused:
 		_draw_pause()
 
 	if bool(snapshot.get("finished", false)):
 		_draw_result()
+
+	if guide_open:
+		_draw_guide()
 
 
 func _draw_minimap() -> void:
@@ -188,6 +224,11 @@ func _draw_card(index: int, card: Dictionary, cd_map: Dictionary, gold: int, use
 	var border := Color("#6FA8DC") if unlocked and ready and can_gold and can_pop else Color("#4A4658")
 	draw_rect(rect, border, false, 1.0)
 	draw_string(font, rect.position + Vector2(4.0, 13.0), String(card.get("name", def_id)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#E8D5A9") if unlocked else Color("#6B6B6B"))
+	var attack_short := String(card.get("attack_type", "")).substr(0, 1).to_upper()
+	var armor_short := String(card.get("armor_type", "")).substr(0, 1).to_upper()
+	draw_string(font, rect.position + Vector2(57.0, 13.0), "%s%s" % [attack_short, armor_short], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC") if unlocked else Color("#4A4658"))
+	if unlocked:
+		draw_string(font, rect.position + Vector2(30.0, 43.0), String(card.get("role", "")).substr(0, 4).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 6, Color("#6B6B6B"))
 	if not unlocked:
 		var req := String(card.get("requirement", "LOCKED"))
 		_center_text_in(req, Rect2(rect.position + Vector2(0.0, 16.0), Vector2(rect.size.x, 24.0)), 7, Color("#8A8498"))
@@ -250,8 +291,9 @@ func _draw_pause() -> void:
 
 func _draw_result() -> void:
 	draw_rect(Rect2(0.0, 0.0, VIEW_W, 360.0), Color(0.0, 0.0, 0.0, 0.58))
-	draw_rect(Rect2(150.0, 112.0, 340.0, 142.0), Color(0.07, 0.06, 0.10, 0.98))
-	draw_rect(Rect2(150.0, 112.0, 340.0, 142.0), Color("#D9A441"), false, 1.5)
+	var panel := Rect2(130.0, 90.0, 380.0, 190.0)
+	draw_rect(panel, Color(0.07, 0.06, 0.10, 0.98))
+	draw_rect(panel, Color("#D9A441"), false, 1.5)
 	var winner := int(snapshot.get("winner", -1))
 	var stars := int(snapshot.get("stars", 0))
 	var mode := String(snapshot.get("mode", "defense"))
@@ -259,12 +301,23 @@ func _draw_result() -> void:
 	if mode == "endless":
 		title = "RUN OVER"
 	var color := Color("#6FA8DC") if winner == 0 else Color("#E06666")
-	_center_text(title, 140.0, 18, color)
+	_center_text(title, 116.0, 18, color)
 	if mode == "endless":
-		_center_text("Waves %d   Score %d" % [int(snapshot.get("wave_index", 0)), int(snapshot.get("score", 0))], 166.0, 14, Color("#D9A441"))
+		_center_text("Waves %d   Score %d" % [int(snapshot.get("wave_index", 0)), int(snapshot.get("score", 0))], 142.0, 14, Color("#D9A441"))
 	else:
-		_center_text("%s%s%s" % ["★" if stars >= 1 else "☆", "★" if stars >= 2 else "☆", "★" if stars >= 3 else "☆"], 166.0, 18, Color("#D9A441"))
-	_center_text("Targets %d   Base %d/%d" % [int(snapshot.get("target_kills", 0)), int(snapshot.get("base_hp", [0, 0])[0]), int(snapshot.get("base_hp_max", 20))], 184.0, 9, Color("#B8B0C8"))
+		_center_text("%s%s%s" % ["★" if stars >= 1 else "☆", "★" if stars >= 2 else "☆", "★" if stars >= 3 else "☆"], 142.0, 18, Color("#D9A441"))
+	var stats: Dictionary = snapshot.get("result_stats", {})
+	var target_total := int(snapshot.get("target_total", 0))
+	_center_text("Targets %d/%d   Base %d/%d" % [int(snapshot.get("target_kills", 0)), target_total, int(snapshot.get("base_hp", [0, 0])[0]), int(snapshot.get("base_hp_max", 20))], 160.0, 9, Color("#B8B0C8"))
+	var leak_parts: Array = []
+	var leaks_by_unit: Dictionary = stats.get("leaks_by_unit", {})
+	var leak_keys: Array = leaks_by_unit.keys()
+	leak_keys.sort_custom(func(a, b): return int(leaks_by_unit[a]) > int(leaks_by_unit[b]))
+	for i in range(mini(leak_keys.size(), 3)):
+		leak_parts.append("%s x%d" % [String(leak_keys[i]), int(leaks_by_unit[leak_keys[i]])])
+	var leak_text := "Leaks " + (", ".join(PackedStringArray(leak_parts)) if not leak_parts.is_empty() else "0")
+	_center_text(leak_text, 174.0, 8, Color("#E06666"))
+	_center_text("Spent units %d / guilds %d / promote %d   Unspent %d" % [int(stats.get("gold_spent_units", 0)), int(stats.get("gold_spent_guilds", 0)), int(stats.get("gold_spent_promote", 0)), int(stats.get("gold_unspent", 0))], 186.0, 7, Color("#8A8498"))
 	for action in RESULT_RECTS:
 		var r: Rect2 = RESULT_RECTS[action]
 		draw_rect(r, Color("#252232"))
@@ -273,12 +326,144 @@ func _draw_result() -> void:
 		_center_text_in(label, r, 8, Color("#E8D5A9"))
 
 
+func _draw_wave_preview() -> void:
+	var preview: Dictionary = snapshot.get("next_wave_preview", {})
+	if preview.is_empty():
+		return
+	var panel := Rect2(298.0, 6.0, 126.0, 52.0)
+	draw_rect(panel, Color(0.05, 0.04, 0.08, 0.92))
+	draw_rect(panel, Color("#4A4658"), false, 1.0)
+	draw_string(font, panel.position + Vector2(7.0, 12.0), "NEXT WAVE %.0fs" % float(preview.get("time", 0.0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#D9A441"))
+	var y := 24.0
+	for lane_data in preview.get("lanes", []):
+		var parts: Array = []
+		for unit in lane_data.get("units", []):
+			var mark := "*" if bool(unit.get("target", false)) else ""
+			parts.append("%d%s%s/%s" % [int(unit.get("count", 1)), String(unit.get("id", "")).substr(0, 4), mark, String(unit.get("armor_type", "")).substr(0, 1).to_upper()])
+		draw_string(font, panel.position + Vector2(7.0, y), "L%d %s" % [int(lane_data.get("lane", 0)) + 1, " ".join(PackedStringArray(parts))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#B8B0C8"))
+		y += 12.0
+		if y > 46.0:
+			break
+
+
+func _draw_checklist() -> void:
+	var panel := Rect2(8.0, 68.0, 190.0, 116.0)
+	draw_rect(panel, Color(0.05, 0.04, 0.08, 0.92))
+	draw_rect(panel, Color("#D9A441"), false, 1.0)
+	draw_string(font, panel.position + Vector2(8.0, 14.0), "FIRST CONTRACT  [F2]", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#E8D5A9"))
+	var iron_tier := -1
+	for guild in snapshot.get("guilds", []):
+		if String(guild.get("id", "")) == "iron":
+			iron_tier = int(guild.get("tier", -1))
+	var used := 0
+	for value in snapshot.get("guild_usage", {}).values():
+		used += int(value)
+	var lines: Array = snapshot.get("advance_lines", [92.0, 92.0])
+	var steps: Array = [
+		["B opens Company", company_seen],
+		["Contact Iron Oath", iron_tier >= 0],
+		["Recruit a class", used > 0],
+		["Shift+RMB set line", absf(float(lines[0]) - 92.0) > 2.0 or absf(float(lines[1]) - 92.0) > 2.0],
+		["Kill a gold target", int(snapshot.get("target_kills", 0)) > 0],
+		["PROMOTE reputation", int(snapshot.get("rep_rank", 0)) > 0],
+	]
+	for i in range(steps.size()):
+		var done := bool(steps[i][1])
+		draw_string(font, panel.position + Vector2(9.0, 30.0 + i * 12.0), ("[x] " if done else "[ ] ") + String(steps[i][0]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC") if done else Color("#B8B0C8"))
+
+
+func _draw_tooltip() -> void:
+	var catalog: Array = snapshot.get("catalog", [])
+	if hover_card < 0 or hover_card >= catalog.size():
+		return
+	var card: Dictionary = catalog[hover_card]
+	var panel := Rect2(clampf(8.0 + hover_card * 77.0 - 70.0, 8.0, 408.0), 168.0, 224.0, 130.0)
+	draw_rect(panel, Color(0.04, 0.03, 0.07, 0.98))
+	draw_rect(panel, Color("#D9A441"), false, 1.0)
+	var x := panel.position.x + 8.0
+	var y := panel.position.y + 15.0
+	draw_string(font, Vector2(x, y), "%s   %s T%d" % [String(card.get("name", "")), String(card.get("guild_name", "")), int(card.get("tier", 0))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#E8D5A9"))
+	y += 14.0
+	draw_string(font, Vector2(x, y), "Role: %s   %s   %s   %dg / p%d" % [String(card.get("role", "")), String(card.get("attack_type", "")), String(card.get("armor_type", "")), int(card.get("cost", 0)), int(card.get("pop", 1))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#B8B0C8"))
+	y += 13.0
+	draw_string(font, Vector2(x, y), "HP %.0f   DPS %.1f   Range %.0f" % [float(card.get("hp", 0)), float(card.get("dps", 0)), float(card.get("range", 0))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#B8B0C8"))
+	y += 13.0
+	draw_string(font, Vector2(x, y), "Passive: %s" % _passive_label(String(card.get("passive", ""))), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+	y += 13.0
+	draw_string(font, Vector2(x, y), "Good vs: %s   Weak vs: %s" % [_join_armor(card.get("good_vs", [])), _join_armor(card.get("weak_vs", []))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC"))
+	if not bool(card.get("unlocked", false)):
+		y += 13.0
+		draw_string(font, Vector2(x, y), "Locked: %s" % String(card.get("requirement", "")), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#E06666"))
+
+
+func _draw_guide() -> void:
+	draw_rect(Rect2(0.0, 0.0, VIEW_W, 360.0), Color(0.02, 0.02, 0.04, 0.985))
+	draw_string(font, Vector2(20.0, 24.0), "FIELD GUIDE  [F1 close]", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, Color("#E8D5A9"))
+	draw_string(font, Vector2(20.0, 44.0), "GOLD: stipend + wave pay + kills.   FAME: kill gold-marked targets.   RANK: FAME + gold PROMOTE.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#B8B0C8"))
+	draw_string(font, Vector2(20.0, 56.0), "GUILD: spend gold to open classes/cap.   CAP: recruit limit.   LINE: Shift+RMB; new units hold there.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#B8B0C8"))
+	draw_string(font, Vector2(20.0, 72.0), "COUNTERS: MELEE > light / weak vs heavy.  RANGED even.  SIEGE > heavy / weak vs light.  Rogue > ranged.  Mage > clumps.  Cleric heals.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#D9A441"))
+	draw_string(font, Vector2(20.0, 90.0), "CLASSES (role / attack / armor / passive):", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#E8D5A9"))
+	var catalog: Array = snapshot.get("catalog", [])
+	for i in range(mini(catalog.size(), 8)):
+		var card: Dictionary = catalog[i]
+		var col := i % 2
+		var row := int(i / 2)
+		draw_string(font, Vector2(20.0 + col * 306.0, 106.0 + row * 16.0), "%s: %s / %s / %s. %s." % [String(card.get("name", "")), String(card.get("role", "")), String(card.get("attack_type", "")), String(card.get("armor_type", "")), _passive_short(String(card.get("passive", "")))], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 6, Color("#B8B0C8"))
+	draw_string(font, Vector2(20.0, 186.0), "TARGETS: gold diamond -> +15g / +1 Fame. Target leaks hurt. ELITE: gold outline, extra base damage.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+	draw_string(font, Vector2(20.0, 204.0), "CONTROLS: 1-8 / Alt+1-8 recruit; Q/E lane; drag select; RMB move; H hold; R return; Ctrl+R retry; F follow; Space pause.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+	draw_string(font, Vector2(20.0, 222.0), "FIRST CONTRACT: B -> contact Iron Oath -> recruit -> Shift+RMB line -> kill gold target -> PROMOTE.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC"))
+	draw_string(font, Vector2(20.0, 244.0), "F1 close   F2 first-contract checklist   Esc contracts", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#E8D5A9"))
+
+
+func _passive_short(passive: String) -> String:
+	return {
+		"shield_wall": "Shield Wall",
+		"armor_pierce": "Armor Pierce",
+		"volley": "Volley",
+		"charge": "Charge",
+		"splash": "Splash",
+		"siege_master": "Siege Master",
+		"backstab": "Backstab",
+		"heal": "Heal",
+	}.get(passive, passive)
+
+
+func _passive_label(passive: String) -> String:
+	return {
+		"shield_wall": "Shield Wall (-30% ranged damage)",
+		"armor_pierce": "Armor Pierce (1.25x vs heavy)",
+		"volley": "Volley (+25% attack speed when stationary)",
+		"charge": "Charge (first hit x2)",
+		"splash": "Splash (50% nearby)",
+		"siege_master": "Siege Master (+ vs heavy/buildings)",
+		"backstab": "Backstab (+50% vs ranged)",
+		"heal": "Heal (lowest-HP ally)",
+	}.get(passive, passive)
+
+
+func _join_armor(values: Array) -> String:
+	if values.is_empty():
+		return "none"
+	var parts: Array = []
+	for value in values:
+		parts.append(String(value))
+	return ", ".join(PackedStringArray(parts))
+
+
 func _card_rect(index: int) -> Rect2:
 	return Rect2(CARD_X + index * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H)
 
 
 func _guild_rect(index: int) -> Rect2:
 	return Rect2(132.0, 112.0 + index * 44.0, 376.0, 40.0)
+
+
+func _card_at(pos: Vector2) -> int:
+	var catalog: Array = snapshot.get("catalog", [])
+	for i in range(mini(catalog.size(), 8)):
+		if _card_rect(i).has_point(pos):
+			return i
+	return -1
 
 
 func _minimap_x(world_x: float) -> float:
@@ -315,8 +500,17 @@ func _is_ui_point(pos: Vector2) -> bool:
 	return false
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_MOUSE_EXIT:
+		hover_card = -1
+		queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
+		hover_pos = event.position
+		hover_card = _card_at(hover_pos)
+		queue_redraw()
 		if minimap_drag:
 			minimap_current_x = event.position.x
 			minimap_moved = minimap_moved or absf(minimap_current_x - minimap_start_x) > 4.0

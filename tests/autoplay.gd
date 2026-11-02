@@ -58,7 +58,7 @@ func _run_level(level: Dictionary, guilds: Array) -> Dictionary:
 				if int(sim.guild_tier.get(String(guild_id), -1)) < 2:
 					sim.queue_guild_action(String(guild_id))
 					break
-		if sim.rep_rank < 3 and sim.gold > 120.0 and sim.fame >= int(BattleSim.PROMO_KILLS[sim.rep_rank]):
+		if sim.rep_rank < sim.promo_kills.size() and sim.gold > 120.0 and sim.fame >= int(sim.promo_kills[sim.rep_rank]):
 			sim.queue_promote()
 
 		for def_id in SPAM:
