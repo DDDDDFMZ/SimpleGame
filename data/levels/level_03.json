@@ -1,127 +1,159 @@
 {
-  "id": "level_03",
-  "name": "Crows",
+  "id": "contract_03",
+  "contract": 3,
+  "name": "Mistmarsh Edge: Red Banner's Hunting Ground",
+  "name_cn": "雾沼边缘：赤旗猎场",
+  "brief": "Red Banner has fenced off a hunting ground at the marsh edge. The prey is not only beasts. Arcane Circle brings mages and clerics.",
+  "brief_cn": "赤旗团在雾沼边圈了一块猎场。星环秘法会带来法师与牧师，赤旗团的猎物不只是野兽。",
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
-  "starting_gold": 150,
-  "base_income": 5.0,
+  "starting_gold": 200,
+  "stipend": 6.0,
   "star_thresholds": [
     12,
     18
   ],
-  "available_units": [
-    "swordsman",
-    "spearman",
-    "archer",
-    "mage",
-    "knight",
-    "catapult"
+  "available_guilds": [
+    "iron",
+    "verdant",
+    "arcane"
   ],
-  "available_buildings": [
-    "farm",
-    "barracks"
-  ],
-  "intro_message": "Light swarm. Mages burn crowds.",
+  "intro_message": "Press B to contact the guilds. Mix steel, arrows and magic. Kill marked targets.",
   "waves": [
     {
       "time": 20,
       "lane": 0,
-      "message": "Wave 1: light spears",
+      "message": "Wave 1: marsh pickets",
       "spawns": [
         {
           "unit": "spearman",
-          "count": 2
+          "count": 3
+        },
+        {
+          "unit": "archer",
+          "count": 2,
+          "lane": 1
         },
         {
           "unit": "spearman",
-          "count": 2,
-          "lane": 1
+          "count": 1,
+          "target": true
         }
       ]
     },
     {
       "time": 70,
       "lane": 0,
-      "message": "Wave 2: archer line",
+      "message": "Wave 2: mounted raiders",
       "spawns": [
         {
-          "unit": "archer",
-          "count": 3
+          "unit": "knight",
+          "count": 2
         },
         {
-          "unit": "spearman",
-          "count": 2,
+          "unit": "archer",
+          "count": 3,
           "lane": 1
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "target": true
         }
       ]
     },
     {
       "time": 120,
       "lane": 0,
-      "message": "Wave 3: dense crowd",
+      "message": "Wave 3: hired magic",
       "spawns": [
         {
-          "unit": "spearman",
-          "count": 4
+          "unit": "mage",
+          "count": 2
         },
         {
-          "unit": "archer",
-          "count": 3,
+          "unit": "swordsman",
+          "count": 4,
           "lane": 1
+        },
+        {
+          "unit": "mage",
+          "count": 1,
+          "target": true
         }
       ]
     },
     {
       "time": 170,
       "lane": 0,
-      "message": "Wave 4: elite bows",
+      "message": "Wave 4: the huntmaster",
       "spawns": [
         {
-          "unit": "archer",
-          "count": 1,
-          "elite": true
+          "unit": "rogue",
+          "count": 3
         },
         {
-          "unit": "spearman",
-          "count": 4,
+          "unit": "archer",
+          "count": 3,
           "lane": 1
+        },
+        {
+          "unit": "rogue",
+          "count": 1,
+          "elite": true,
+          "target": true
         }
       ]
     },
     {
       "time": 220,
       "lane": 0,
-      "message": "Wave 5: both lanes",
+      "message": "Wave 5: steel and fire",
       "spawns": [
         {
-          "unit": "spearman",
-          "count": 5
+          "unit": "knight",
+          "count": 3
+        },
+        {
+          "unit": "mage",
+          "count": 2
         },
         {
           "unit": "archer",
           "count": 4,
           "lane": 1
+        },
+        {
+          "unit": "knight",
+          "count": 1,
+          "target": true
         }
       ]
     },
     {
       "time": 270,
       "lane": 0,
-      "message": "Wave 6: final mix",
+      "message": "Wave 6: Red Banner's answer",
       "spawns": [
         {
-          "unit": "spearman",
-          "count": 6
-        },
-        {
-          "unit": "archer",
-          "count": 4,
-          "lane": 1
+          "unit": "swordsman",
+          "count": 4
         },
         {
           "unit": "mage",
           "count": 1
+        },
+        {
+          "unit": "archer",
+          "count": 3,
+          "lane": 1
+        },
+        {
+          "unit": "mage",
+          "count": 1,
+          "elite": true,
+          "target": true
         }
       ]
     }

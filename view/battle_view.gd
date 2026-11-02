@@ -12,6 +12,8 @@ var unit_views: Dictionary = {}
 var last_snapshot: Dictionary = {}
 var active_lane: int = 0
 var selected_ids: Array = []
+var drag_world_rect: Rect2 = Rect2()
+var drag_active: bool = false
 
 
 func setup(p_runner: SimRunner) -> void:
@@ -22,6 +24,12 @@ func setup(p_runner: SimRunner) -> void:
 
 func set_active_lane(lane: int) -> void:
 	active_lane = clampi(lane, 0, LANE_Y.size() - 1)
+	queue_redraw()
+
+
+func set_drag_rect(rect: Rect2, active: bool) -> void:
+	drag_world_rect = rect
+	drag_active = active
 	queue_redraw()
 
 
@@ -37,6 +45,8 @@ func reset_view() -> void:
 		view.queue_free()
 	unit_views.clear()
 	last_snapshot = {}
+	drag_active = false
+	drag_world_rect = Rect2()
 	queue_redraw()
 
 
@@ -102,3 +112,7 @@ func _draw() -> void:
 		var lane := clampi(int(p.get("lane", 0)), 0, LANE_Y.size() - 1)
 		var color := Color("#D9A441") if int(p.get("team", 0)) == 0 else Color("#E06666")
 		draw_circle(Vector2(float(p.get("x", 0.0)), LANE_Y[lane]), 2.0, color)
+
+	if drag_active:
+		draw_rect(drag_world_rect, Color(0.42, 0.66, 0.89, 0.14))
+		draw_rect(drag_world_rect, Color("#6FA8DC"), false, 1.0)

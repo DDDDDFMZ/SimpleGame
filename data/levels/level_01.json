@@ -1,51 +1,101 @@
 {
-  "id": "level_01",
-  "name": "Border Outpost",
+  "id": "contract_01",
+  "contract": 1,
+  "name": "Greyhaven Outskirts: The Tax Men",
+  "name_cn": "灰港外环：收税人",
+  "brief": "Red Banner 'tax collectors' are burning the outer farms. Iron Oath gives you your first real contract: drive them out of the wheat.",
+  "brief_cn": "赤旗团以收税为名洗劫外环村落。铁誓会给你第一份正式委托：把他们赶出麦田。",
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
-  "starting_gold": 120,
-  "base_income": 4.0,
-  "star_thresholds": [12, 18],
-  "available_units": ["swordsman", "spearman", "archer", "mage", "knight", "catapult"],
-  "available_buildings": ["farm", "barracks"],
-  "intro_message": "Build economy, hold both lanes.",
+  "starting_gold": 200,
+  "stipend": 6.0,
+  "star_thresholds": [
+    12,
+    18
+  ],
+  "available_guilds": [
+    "iron"
+  ],
+  "intro_message": "Press B, contact Iron Oath, then hold the line. Kill marked targets for fame.",
   "waves": [
-	{
-	  "time": 20,
-	  "lane": 0,
-	  "message": "Wave 1: swordsmen",
-	  "spawns": [
-		{"unit": "swordsman", "count": 3}
-	  ]
-	},
-	{
-	  "time": 70,
-	  "lane": 0,
-	  "message": "Wave 2: more swordsmen",
-	  "spawns": [
-		{"unit": "swordsman", "count": 5}
-	  ]
-	},
-	{
-	  "time": 130,
-	  "lane": 0,
-	  "message": "Wave 3: archers behind shields",
-	  "spawns": [
-		{"unit": "swordsman", "count": 4},
-		{"unit": "archer", "count": 3}
-	  ]
-	},
-	{
-	  "time": 190,
-	  "lane": 0,
-	  "message": "Wave 4: both lanes",
-	  "spawns": [
-		{"unit": "swordsman", "count": 5},
-		{"unit": "archer", "count": 4},
-		{"unit": "swordsman", "count": 1, "elite": true},
-		{"unit": "swordsman", "count": 3, "lane": 1}
-	  ]
-	}
+    {
+      "time": 20,
+      "lane": 0,
+      "message": "Wave 1: Red Banner swords",
+      "spawns": [
+        {
+          "unit": "swordsman",
+          "count": 3
+        },
+        {
+          "unit": "swordsman",
+          "count": 1,
+          "target": true
+        }
+      ]
+    },
+    {
+      "time": 65,
+      "lane": 0,
+      "message": "Wave 2: shields and spears",
+      "spawns": [
+        {
+          "unit": "swordsman",
+          "count": 4
+        },
+        {
+          "unit": "spearman",
+          "count": 3
+        },
+        {
+          "unit": "spearman",
+          "count": 1,
+          "target": true
+        }
+      ]
+    },
+    {
+      "time": 115,
+      "lane": 0,
+      "message": "Wave 3: the tax captain",
+      "spawns": [
+        {
+          "unit": "swordsman",
+          "count": 5
+        },
+        {
+          "unit": "spearman",
+          "count": 4
+        },
+        {
+          "unit": "swordsman",
+          "count": 1,
+          "target": true,
+          "elite": true
+        }
+      ]
+    },
+    {
+      "time": 170,
+      "lane": 0,
+      "message": "Wave 4: both lanes",
+      "spawns": [
+        {
+          "unit": "swordsman",
+          "count": 6
+        },
+        {
+          "unit": "spearman",
+          "count": 4,
+          "lane": 1
+        },
+        {
+          "unit": "swordsman",
+          "count": 1,
+          "target": true
+        }
+      ]
+    }
   ]
 }

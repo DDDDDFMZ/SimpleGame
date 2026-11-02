@@ -32,6 +32,11 @@ func _draw() -> void:
 	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), Color(0.0, 0.0, 0.0, 0.45), false, 1.0)
 	if bool(data.get("is_elite", false)):
 		draw_rect(Rect2(-8.0, -11.0, 16.0, 22.0), Color("#D9A441"), false, 1.5)
+	if bool(data.get("is_target", false)):
+		draw_rect(Rect2(-9.0, -12.0, 18.0, 24.0), Color("#F0C75E"), false, 2.0)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(0.0, -19.0), Vector2(4.0, -15.0), Vector2(0.0, -11.0), Vector2(-4.0, -15.0),
+		]), Color("#F0C75E"))
 	if selected:
 		draw_arc(Vector2(0.0, 0.0), 12.0, 0.0, TAU, 16, Color("#D9A441"), 1.5)
 

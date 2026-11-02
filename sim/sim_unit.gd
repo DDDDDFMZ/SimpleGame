@@ -28,12 +28,19 @@ var slot: int = 0
 var charge_used: bool = false
 var stationary_time: float = 0.0
 var is_elite: bool = false
+var is_target: bool = false
 var manual_order: bool = false
 var move_target_x: float = 0.0
 var hold_position: bool = false
+var at_base: bool = false
+var combat_cooldown: float = 0.0
+var heal_cd: float = 0.0
+var heal_amount: float = 0.0
+var heal_interval: float = 0.0
+var heal_range: float = 0.0
 
 
-func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float, p_elite: bool = false) -> void:
+func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float, p_elite: bool = false, p_target: bool = false) -> void:
 	id = p_id
 	team = p_team
 	lane = p_lane
@@ -41,6 +48,7 @@ func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Diction
 	def = p_def
 	x = p_x
 	is_elite = p_elite
+	is_target = p_target
 
 	max_hp = float(def.get("hp", 100.0))
 	if is_elite:
@@ -55,3 +63,6 @@ func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Diction
 	passive = String(def.get("passive", ""))
 	projectile_speed = float(def.get("projectile_speed", 0.0))
 	aggro_range = maxf(100.0, attack_range + 20.0)
+	heal_amount = float(def.get("heal_amount", 0.0))
+	heal_interval = float(def.get("heal_interval", 0.0))
+	heal_range = float(def.get("heal_range", 0.0))

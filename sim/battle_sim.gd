@@ -5,27 +5,11 @@ const PLAYER := 0
 const ENEMY := 1
 const TICK_DT := 0.05
 const TICK_HZ := 20.0
-
-const UNIT_ORDER := ["swordsman", "spearman", "archer", "mage", "knight", "catapult"]
-const SLOT_TYPES := ["farm", "farm", "barracks", "barracks"]
-const SLOT_LANES := [-1, -1, 0, 1]
-const BASE_POP := 10
-
-const BUILDING_DEFS := {
-	"farm": {
-		"build_cost": 50,
-		"upgrade_cost": 60,
-		"max_level": 2,
-		"income": [0, 2, 3],
-	},
-	"barracks": {
-		"build_cost": 60,
-		"upgrade_cost": 70,
-		"max_level": 2,
-		"pop": [0, 4, 8],
-		"cd_reduction": [0.0, 0.1, 0.2],
-	},
-}
+const BASE_POP := 8
+const UNIT_ORDER := ["swordsman", "spearman", "knight", "archer", "rogue", "catapult", "mage", "cleric"]
+const GUILD_ORDER := ["iron", "verdant", "arcane"]
+const PROMO_KILLS := [1, 3, 5]
+const PROMO_COST := [40, 80, 120]
 
 const COUNTER := {
 	"melee": {"light": 1.5, "heavy": 0.75},
@@ -42,6 +26,7 @@ var units: Array = []
 var projectiles: Array = []
 var commands: Array = []
 var unit_defs: Dictionary = {}
+var guild_defs: Dictionary = {}
 var next_id: int = 1
 var next_projectile_id: int = 1
 
@@ -53,13 +38,19 @@ var enemy_base_x: float = 1520.0
 var lane_count: int = 2
 var advance_lines: Array = [92.0, 92.0]
 
-var gold: float = 120.0
-var base_income: float = 4.0
-var income_per_sec: float = 4.0
+var gold: float = 150.0
+var stipend: float = 2.5
 var pop_max: int = BASE_POP
-var buildings: Array = []
 var spawn_cd: Array = [{}, {}]
-var lane_cd_mult: Array = [1.0, 1.0]
+
+var fame: int = 0
+var target_kills: int = 0
+var rep_rank: int = 0
+var guild_tier: Dictionary = {}
+var guild_usage: Dictionary = {}
+var meta_unlocked_guilds: Array = []
+var guild_favor: Dictionary = {}
+var level_available_guilds: Array = []
 
 var level: Dictionary = {}
 var waves: Array = []
@@ -70,13 +61,18 @@ var message_timer: float = 0.0
 var last_error: String = ""
 var error_timer: float = 0.0
 var defense_mode: bool = false
+var endless_mode: bool = false
 var economy_enabled: bool = true
+var endless_wave: int = 0
+var endless_timer: float = 10.0
+var kills: int = 0
+var score: int = 0
 
 var finished: bool = false
 var winner: int = -1
 
 
-func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level: Dictionary = {}, p_economy: bool = true) -> void:
+func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level: Dictionary = {}, p_economy: bool = true, p_profile: Dictionary = {}) -> void:
 	seed = p_seed
 	rng.seed = seed
 	level = p_level
@@ -86,33 +82,74 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	base_damage = int(level.get("base_damage", p_base_damage))
 	base_hp = [base_hp_max, base_hp_max]
 	advance_lines = [player_base_x + 12.0, player_base_x + 12.0]
-	base_income = float(level.get("base_income", 4.0))
-	gold = float(level.get("starting_gold", 120.0))
+	stipend = float(level.get("stipend", 2.5))
+	gold = float(level.get("starting_gold", 150.0))
 
 	waves = level.get("waves", [])
 	wave_count = waves.size()
-	defense_mode = String(level.get("mode", "")) == "defense"
+	var level_mode := String(level.get("mode", ""))
+	defense_mode = level_mode == "defense" or level_mode == "endless"
+	endless_mode = level_mode == "endless"
 	wave_message = String(level.get("intro_message", ""))
 	message_timer = 4.0
 
-	unit_defs = _load_unit_defs()
-	buildings = []
-	for i in range(4):
-		buildings.append({"type": "", "level": 0})
-	_recompute_economy()
+	unit_defs = _load_json("res://data/units.json")
+	guild_defs = _load_json("res://data/guilds.json")
+	meta_unlocked_guilds = p_profile.get("unlocked_guilds", [])
+	guild_favor = p_profile.get("guild_favor", {})
+
+	level_available_guilds = level.get("available_guilds", GUILD_ORDER)
+	for guild_id in GUILD_ORDER:
+		guild_tier[guild_id] = -1
+		guild_usage[guild_id] = 0
+	_recompute_cap()
 
 
-func _load_unit_defs() -> Dictionary:
-	var path := "res://data/units.json"
+func _load_json(path: String) -> Dictionary:
 	var text := FileAccess.get_file_as_string(path)
 	if text.is_empty():
-		push_error("Cannot read unit data: " + path)
+		push_error("Cannot read data: " + path)
 		return {}
 	var parsed: Variant = JSON.parse_string(text)
 	if typeof(parsed) != TYPE_DICTIONARY:
-		push_error("Invalid unit data (expected dictionary): " + path)
+		push_error("Invalid JSON dictionary: " + path)
 		return {}
 	return parsed
+
+
+func _guild_is_unlocked(guild_id: String) -> bool:
+	if not guild_defs.has(guild_id):
+		return false
+	if not level_available_guilds.has(guild_id):
+		return false
+	if meta_unlocked_guilds.is_empty():
+		return true
+	return meta_unlocked_guilds.has(guild_id)
+
+
+func _unit_unlocked(def_id: String) -> bool:
+	if not unit_defs.has(def_id):
+		return false
+	var def: Dictionary = unit_defs[def_id]
+	if not bool(def.get("recruitable", true)):
+		return false
+	var guild_id := String(def.get("guild", ""))
+	if not _guild_is_unlocked(guild_id):
+		return false
+	return int(guild_tier.get(guild_id, -1)) >= int(def.get("relation_tier", 0))
+
+
+func _effective_def(def_id: String) -> Dictionary:
+	var d: Dictionary = unit_defs[def_id].duplicate(true)
+	var guild_id := String(d.get("guild", ""))
+	var favor := int(guild_favor.get(guild_id, 0))
+	if favor > 0:
+		var stat_mult := 1.0 + 0.01 * favor
+		var cost_mult := maxf(0.5, 1.0 - 0.005 * favor)
+		d["hp"] = float(d.get("hp", 100.0)) * stat_mult
+		d["damage"] = float(d.get("damage", 10.0)) * stat_mult
+		d["cost"] = int(round(float(d.get("cost", 0)) * cost_mult))
+	return d
 
 
 func queue_spawn(team: int, lane: int, def_id: String, elite: bool = false) -> void:
@@ -127,31 +164,16 @@ func queue_spawn(team: int, lane: int, def_id: String, elite: bool = false) -> v
 	commands.append({"type": "spawn", "team": team, "lane": lane, "def_id": def_id, "elite": elite})
 
 
-func queue_build(slot: int) -> void:
-	if finished:
+func queue_guild_action(guild_id: String) -> void:
+	if finished or not guild_defs.has(guild_id):
 		return
-	if slot < 0 or slot >= 4:
-		_error("Invalid building slot")
-		return
+	commands.append({"type": "guild_action", "guild": guild_id})
 
-	var building_type: String = SLOT_TYPES[slot]
-	var allowed: Array = level.get("available_buildings", ["farm", "barracks"])
-	if not allowed.has(building_type):
-		_error("Building locked")
-		return
 
-	var b: Dictionary = buildings[slot]
-	var def: Dictionary = BUILDING_DEFS[building_type]
-	if int(b["level"]) >= int(def["max_level"]):
-		_error("Max level")
+func queue_promote() -> void:
+	if finished or rep_rank >= 3:
 		return
-
-	var cost := int(def["build_cost"]) if int(b["level"]) == 0 else int(def["upgrade_cost"])
-	if economy_enabled and gold < cost:
-		_error("Not enough gold")
-		return
-
-	commands.append({"type": "build", "slot": slot})
+	commands.append({"type": "promote"})
 
 
 func queue_set_advance_line(lane: int, x: float) -> void:
@@ -191,7 +213,8 @@ func tick() -> void:
 		return
 
 	elapsed += TICK_DT
-	_update_economy(TICK_DT)
+	if economy_enabled:
+		gold += stipend * TICK_DT
 	_update_cooldowns(TICK_DT)
 	_update_timers(TICK_DT)
 	_apply_commands()
@@ -203,12 +226,9 @@ func tick() -> void:
 	_update_projectiles(TICK_DT)
 	_cleanup_dead()
 	_check_finished()
+	if endless_mode:
+		score = endless_wave * 100 + kills * 10 + int(base_hp[PLAYER]) * 50
 	tick_count += 1
-
-
-func _update_economy(dt: float) -> void:
-	if economy_enabled:
-		gold += income_per_sec * dt
 
 
 func _update_cooldowns(dt: float) -> void:
@@ -237,8 +257,10 @@ func _apply_commands() -> void:
 		match String(cmd.get("type", "")):
 			"spawn":
 				_spawn_unit(int(cmd["team"]), int(cmd["lane"]), String(cmd["def_id"]), bool(cmd.get("elite", false)))
-			"build":
-				_apply_build(int(cmd["slot"]))
+			"guild_action":
+				_apply_guild_action(String(cmd["guild"]))
+			"promote":
+				_apply_promote()
 			"advance_line":
 				_apply_advance_line(int(cmd["lane"]), float(cmd["x"]))
 			"move_squad":
@@ -248,6 +270,64 @@ func _apply_commands() -> void:
 			"return_squad":
 				_apply_return_squad(cmd["ids"])
 	commands.clear()
+
+
+func _apply_guild_action(guild_id: String) -> void:
+	if not _guild_is_unlocked(guild_id):
+		_error("Guild locked")
+		return
+	var guild: Dictionary = guild_defs[guild_id]
+	var tiers: Array = guild.get("tiers", [])
+	var next_tier := int(guild_tier.get(guild_id, -1)) + 1
+	if next_tier >= tiers.size():
+		_error("Guild maxed")
+		return
+	var tier: Dictionary = tiers[next_tier]
+	if next_tier == 2 and rep_rank < 1:
+		_error("Needs Reputation Rank 1")
+		return
+	if next_tier == 3 and rep_rank < 2:
+		_error("Needs Reputation Rank 2")
+		return
+	var cost := int(tier.get("cost", 0))
+	if economy_enabled and gold < cost:
+		_error("Not enough gold")
+		return
+	if economy_enabled:
+		gold -= cost
+	guild_tier[guild_id] = next_tier
+	_recompute_cap()
+
+
+func _apply_promote() -> void:
+	if rep_rank >= 3:
+		_error("Max reputation")
+		return
+	var needed := int(PROMO_KILLS[rep_rank])
+	var cost := int(PROMO_COST[rep_rank])
+	if fame < needed:
+		_error("Need %d target kills" % needed)
+		return
+	if economy_enabled and gold < cost:
+		_error("Not enough gold")
+		return
+	if economy_enabled:
+		gold -= cost
+	rep_rank += 1
+	_recompute_cap()
+	wave_message = "Reputation Rank %d" % rep_rank
+	message_timer = 2.0
+
+
+func _recompute_cap() -> void:
+	pop_max = BASE_POP + rep_rank * 2
+	for guild_id in GUILD_ORDER:
+		var tier := int(guild_tier.get(guild_id, -1))
+		if tier < 0 or not guild_defs.has(guild_id):
+			continue
+		var tiers: Array = guild_defs[guild_id].get("tiers", [])
+		for i in range(mini(tier + 1, tiers.size())):
+			pop_max += int(tiers[i].get("cap", 0))
 
 
 func _apply_advance_line(lane: int, x: float) -> void:
@@ -266,6 +346,7 @@ func _apply_move_squad(unit_ids: Array, x: float) -> void:
 			continue
 		u.manual_order = true
 		u.hold_position = false
+		u.at_base = false
 		u.move_target_x = x
 
 
@@ -276,6 +357,7 @@ func _apply_hold_squad(unit_ids: Array) -> void:
 			continue
 		u.manual_order = true
 		u.hold_position = true
+		u.at_base = false
 		u.move_target_x = u.x
 
 
@@ -286,14 +368,23 @@ func _apply_return_squad(unit_ids: Array) -> void:
 			continue
 		u.manual_order = false
 		u.hold_position = false
+		u.at_base = false
 		u.move_target_x = float(advance_lines[u.lane])
 
 
-func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false) -> void:
+func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false, is_target: bool = false) -> void:
 	if not unit_defs.has(def_id):
 		_error("Unknown unit")
 		return
-	var def: Dictionary = unit_defs[def_id]
+
+	var def: Dictionary
+	if team == PLAYER:
+		if economy_enabled and not _unit_unlocked(def_id):
+			_error("Unit locked")
+			return
+		def = _effective_def(def_id)
+	else:
+		def = unit_defs[def_id]
 
 	if team == PLAYER and economy_enabled:
 		var cost := int(def.get("cost", 0))
@@ -302,17 +393,19 @@ func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false) -> v
 			_error("Not enough gold")
 			return
 		if get_pop_used() + pop > pop_max:
-			_error("Population full")
+			_error("Recruitment cap reached")
 			return
 		var cd := float(spawn_cd[lane].get(def_id, 0.0))
 		if cd > 0.0:
 			_error("Unit on cooldown")
 			return
 		gold -= cost
-		spawn_cd[lane][def_id] = float(def.get("cooldown", 3.0)) * float(lane_cd_mult[lane])
+		spawn_cd[lane][def_id] = float(def.get("cooldown", 3.0))
+		var guild_id := String(def.get("guild", ""))
+		guild_usage[guild_id] = int(guild_usage.get(guild_id, 0)) + 1
 
 	var spawn_x := player_base_x + 12.0 if team == PLAYER else enemy_base_x - 12.0
-	var unit := SimUnit.new(next_id, team, lane, def_id, def, spawn_x, elite)
+	var unit := SimUnit.new(next_id, team, lane, def_id, def, spawn_x, elite, is_target)
 	unit.slot = _next_slot(team, lane)
 
 	if team == PLAYER:
@@ -322,73 +415,85 @@ func _spawn_unit(team: int, lane: int, def_id: String, elite: bool = false) -> v
 	unit.x = clampf(unit.x, player_base_x, enemy_base_x)
 	unit.manual_order = false
 	unit.hold_position = false
+	unit.at_base = false
 	unit.move_target_x = float(advance_lines[lane]) if team == PLAYER else player_base_x
 
 	next_id += 1
 	units.append(unit)
 
 
-func _apply_build(slot: int) -> void:
-	var building_type: String = SLOT_TYPES[slot]
-	var b: Dictionary = buildings[slot]
-	var def: Dictionary = BUILDING_DEFS[building_type]
-	var level_now := int(b["level"])
-	if level_now >= int(def["max_level"]):
-		_error("Max level")
-		return
-
-	var cost := int(def["build_cost"]) if level_now == 0 else int(def["upgrade_cost"])
-	if economy_enabled and gold < cost:
-		_error("Not enough gold")
-		return
-
-	if economy_enabled:
-		gold -= cost
-	b["type"] = building_type
-	b["level"] = level_now + 1
-	_recompute_economy()
-
-
-func _recompute_economy() -> void:
-	income_per_sec = base_income
-	pop_max = BASE_POP
-	lane_cd_mult = [1.0, 1.0]
-
-	for i in range(4):
-		var b: Dictionary = buildings[i]
-		var building_type := String(b["type"])
-		var level_now := int(b["level"])
-		if level_now <= 0 or not BUILDING_DEFS.has(building_type):
-			continue
-		var def: Dictionary = BUILDING_DEFS[building_type]
-		if building_type == "farm":
-			income_per_sec += float(def["income"][level_now])
-		elif building_type == "barracks":
-			pop_max += int(def["pop"][level_now])
-			var lane := int(SLOT_LANES[i])
-			lane_cd_mult[lane] = maxf(0.5, float(lane_cd_mult[lane]) - float(def["cd_reduction"][level_now]))
-
-
 func _update_waves() -> void:
+	if endless_mode:
+		_update_endless(TICK_DT)
+		return
 	while next_wave_index < waves.size():
 		var wave: Dictionary = waves[next_wave_index]
 		if float(wave.get("time", 0.0)) > elapsed:
 			break
-		_spawn_wave(wave)
+		_spawn_wave(wave, next_wave_index + 1)
 		wave_message = String(wave.get("message", ""))
 		message_timer = 4.0
 		next_wave_index += 1
 
 
-func _spawn_wave(wave: Dictionary) -> void:
+func _spawn_wave(wave: Dictionary, wave_number: int) -> void:
+	if economy_enabled:
+		gold += 30.0 + 5.0 * wave_number
 	var default_lane := int(wave.get("lane", 0))
 	for spawn in wave.get("spawns", []):
 		var lane := int(spawn.get("lane", default_lane))
 		var unit_id := String(spawn.get("unit", "swordsman"))
 		var count := int(spawn.get("count", 1))
 		var elite := bool(spawn.get("elite", false))
+		var target := bool(spawn.get("target", false))
 		for i in range(count):
-			_spawn_unit(ENEMY, lane, unit_id, elite)
+			_spawn_unit(ENEMY, lane, unit_id, elite, target)
+
+
+func _update_endless(dt: float) -> void:
+	for u in units:
+		if u.alive and u.team == ENEMY:
+			return
+	endless_timer = maxf(0.0, endless_timer - dt)
+	if endless_timer > 0.0:
+		return
+	endless_wave += 1
+	_spawn_endless_wave(endless_wave)
+	endless_timer = maxf(8.0, 18.0 - endless_wave * 0.5)
+	wave_message = "Endless wave %d" % endless_wave
+	message_timer = 3.0
+
+
+func _spawn_endless_wave(wave_number: int) -> void:
+	if economy_enabled:
+		gold += 30.0 + 5.0 * wave_number
+	var budget := 40.0 + 14.0 * wave_number + 1.2 * wave_number * wave_number
+	var spent := 0.0
+	var spawned := 0
+	var target_spawned := false
+	while spent < budget and spawned < 30:
+		var remaining := budget - spent
+		var candidates: Array = []
+		for candidate_id in UNIT_ORDER:
+			if unit_defs.has(candidate_id) and float(unit_defs[candidate_id].get("cost", 30)) <= remaining:
+				candidates.append(candidate_id)
+		if candidates.is_empty():
+			break
+		var def_id: String = String(candidates[rng.randi_range(0, candidates.size() - 1)])
+		var base: Dictionary = unit_defs.get(def_id, {})
+		if base.is_empty():
+			break
+		var cost := float(base.get("cost", 30))
+		var lane := rng.randi_range(0, lane_count - 1)
+		var elite := rng.randf() < minf(0.25, 0.04 + 0.01 * wave_number)
+		var mark_target := wave_number % 3 == 0 and not target_spawned
+		_spawn_unit(ENEMY, lane, def_id, elite, mark_target)
+		if mark_target:
+			target_spawned = true
+		spent += cost
+		spawned += 1
+	if spawned == 0:
+		_spawn_unit(ENEMY, 0, "swordsman", false, false)
 
 
 func _next_slot(team: int, lane: int) -> int:
@@ -401,7 +506,13 @@ func _next_slot(team: int, lane: int) -> int:
 
 func _update_unit(u: SimUnit, dt: float) -> void:
 	u.attack_cd = maxf(0.0, u.attack_cd - dt)
+	u.combat_cooldown = maxf(0.0, u.combat_cooldown - dt)
+	_update_heal(u, dt)
+
+	var previous_target := u.target_id
 	var target := _find_target(u)
+	if target == null and previous_target >= 0:
+		u.combat_cooldown = 0.35
 	var moved := false
 
 	if target != null and absf(target.x - u.x) <= u.attack_range:
@@ -415,17 +526,25 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 		u.state = "hold"
 		u.target_id = target.id if target != null else -1
 		u.stationary_time += dt
+	elif target != null:
+		u.state = "engage"
+		u.target_id = target.id
+		moved = _move_unit(u, target.x, dt)
+		if moved:
+			u.stationary_time = 0.0
+		else:
+			u.stationary_time += dt
+	elif u.combat_cooldown > 0.0:
+		u.state = "hold"
+		u.target_id = -1
+		u.stationary_time += dt
 	else:
 		u.state = "advance"
-		if target != null:
-			u.target_id = target.id
-			moved = _move_unit(u, target.x, dt)
-		else:
-			u.target_id = -1
-			var goal := player_base_x
-			if u.team == PLAYER:
-				goal = u.move_target_x if u.manual_order else float(advance_lines[u.lane])
-			moved = _move_unit(u, goal, dt)
+		u.target_id = -1
+		var goal := player_base_x
+		if u.team == PLAYER:
+			goal = u.move_target_x if u.manual_order else float(advance_lines[u.lane])
+		moved = _move_unit(u, goal, dt)
 		if moved:
 			u.stationary_time = 0.0
 		else:
@@ -435,13 +554,36 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 	_check_base_arrival(u)
 
 
+func _update_heal(u: SimUnit, dt: float) -> void:
+	if u.heal_amount <= 0.0:
+		return
+	u.heal_cd = maxf(0.0, u.heal_cd - dt)
+	if u.heal_cd > 0.0:
+		return
+	var best: SimUnit = null
+	var best_ratio := 1.0
+	for e in units:
+		if not e.alive or e.team != u.team or e.lane != u.lane or e.hp >= e.max_hp:
+			continue
+		if absf(e.x - u.x) > u.heal_range:
+			continue
+		var ratio: float = float(e.hp) / maxf(1.0, float(e.max_hp))
+		if ratio < best_ratio:
+			best_ratio = ratio
+			best = e
+	if best != null:
+		best.hp = minf(best.max_hp, best.hp + u.heal_amount)
+		u.heal_cd = u.heal_interval
+
+
 func _move_unit(u: SimUnit, goal_x: float, dt: float) -> bool:
-	var delta_x := goal_x - u.x
-	if absf(delta_x) <= 0.5:
+	var step := u.speed * dt
+	var delta := goal_x - u.x
+	if absf(delta) <= maxf(1.0, step):
+		u.x = goal_x
 		return false
-	var old_x := u.x
-	u.x = clampf(u.x + u.speed * dt * signf(delta_x), player_base_x, enemy_base_x)
-	return not is_equal_approx(old_x, u.x)
+	u.x = clampf(u.x + signf(delta) * step, player_base_x, enemy_base_x)
+	return true
 
 
 func _attack_interval(u: SimUnit) -> float:
@@ -473,6 +615,8 @@ func _damage_multiplier(attack_type: String, source_passive: String, target: Sim
 		mult = maxf(mult, 1.25)
 	if source_passive == "siege_master" and target.armor_type == "heavy":
 		mult *= 1.25
+	if source_passive == "backstab" and target.attack_type == "ranged":
+		mult *= 1.5
 	if target.passive == "shield_wall" and attack_type == "ranged":
 		mult *= 0.7
 
@@ -538,15 +682,27 @@ func _apply_damage(target: SimUnit, amount: float, source_team: int) -> void:
 
 
 func _on_unit_killed(target: SimUnit, source_team: int) -> void:
+	if target.team == ENEMY and source_team == PLAYER:
+		kills += 1
 	if not economy_enabled:
 		return
 	if target.team == ENEMY and source_team == PLAYER:
 		var cost := float(target.def.get("cost", 0))
 		var ratio := 0.3 if target.is_elite else 0.2
 		gold += maxf(1.0, cost * ratio)
+		if target.is_target:
+			fame += 1
+			target_kills += 1
+			gold += 15.0
 
 
 func _find_target(u: SimUnit) -> SimUnit:
+	if u.target_id >= 0:
+		var current := _unit_by_id(u.target_id)
+		if current != null and current.alive and current.lane == u.lane and current.team != u.team:
+			if absf(current.x - u.x) <= u.aggro_range * 1.3:
+				return current
+
 	var best: SimUnit = null
 	var best_dist := INF
 	for e in units:
@@ -566,6 +722,8 @@ func _check_base_arrival(u: SimUnit) -> void:
 		if defense_mode:
 			u.x = enemy_base_x - 8.0
 			u.state = "hold"
+			u.hold_position = true
+			u.at_base = true
 		else:
 			base_hp[ENEMY] = maxi(0, int(base_hp[ENEMY]) - base_damage)
 			u.alive = false
@@ -631,6 +789,16 @@ func is_finished() -> bool:
 	return finished
 
 
+func get_stars() -> int:
+	if winner != PLAYER:
+		return 0
+	if int(base_hp[PLAYER]) >= 18:
+		return 3
+	if int(base_hp[PLAYER]) >= 12:
+		return 2
+	return 1
+
+
 func _error(text: String) -> void:
 	last_error = text
 	error_timer = 2.5
@@ -647,34 +815,56 @@ func _catalog() -> Array:
 	for def_id in UNIT_ORDER:
 		if not unit_defs.has(def_id):
 			continue
-		var def: Dictionary = unit_defs[def_id]
+		var base: Dictionary = unit_defs[def_id]
+		var effective: Dictionary = _effective_def(def_id)
+		var guild_id := String(base.get("guild", ""))
+		var tier_needed := int(base.get("relation_tier", 0))
 		result.append({
 			"id": def_id,
-			"name": String(def.get("display_name", def_id)),
-			"cost": int(def.get("cost", 0)),
-			"pop": int(def.get("pop", 1)),
+			"name": String(base.get("display_name", def_id)),
+			"guild": guild_id,
+			"guild_name": String(guild_defs.get(guild_id, {}).get("short", guild_id)),
+			"role": String(base.get("role", "")),
+			"tier": tier_needed,
+			"cost": int(effective.get("cost", 0)),
+			"pop": int(effective.get("pop", 1)),
+			"unlocked": _unit_unlocked(def_id),
+			"guild_unlocked": _guild_is_unlocked(guild_id),
+			"requirement": "" if _unit_unlocked(def_id) else "%s T%d" % [String(guild_defs.get(guild_id, {}).get("short", guild_id)), tier_needed],
 		})
 	return result
 
 
-func _building_snapshot() -> Array:
+func _guild_snapshot() -> Array:
 	var result: Array = []
-	for i in range(4):
-		var b: Dictionary = buildings[i]
-		var building_type: String = String(b["type"]) if String(b["type"]) != "" else String(SLOT_TYPES[i])
-		var level_now := int(b["level"])
-		var def: Dictionary = BUILDING_DEFS[building_type]
-		var max_level := int(def["max_level"])
+	for guild_id in GUILD_ORDER:
+		if not guild_defs.has(guild_id):
+			continue
+		var guild: Dictionary = guild_defs[guild_id]
+		var tiers: Array = guild.get("tiers", [])
+		var tier := int(guild_tier.get(guild_id, -1))
+		var next_tier := tier + 1
 		var next_cost := 0
-		if level_now < max_level:
-			next_cost = int(def["build_cost"]) if level_now == 0 else int(def["upgrade_cost"])
+		var next_cap := 0
+		var next_units: Array = []
+		if next_tier < tiers.size():
+			next_cost = int(tiers[next_tier].get("cost", 0))
+			next_cap = int(tiers[next_tier].get("cap", 0))
+			next_units = tiers[next_tier].get("units", [])
 		result.append({
-			"slot": i,
-			"type": building_type,
-			"level": level_now,
-			"max_level": max_level,
+			"id": guild_id,
+			"name": String(guild.get("name", guild_id)),
+			"short": String(guild.get("short", guild_id)),
+			"unlocked": _guild_is_unlocked(guild_id),
+			"tier": tier,
+			"max_tier": tiers.size() - 1,
 			"next_cost": next_cost,
-			"can_afford": economy_enabled and level_now < max_level and gold >= next_cost,
+			"next_cap": next_cap,
+			"next_units": next_units,
+			"rank_gate": 1 if next_tier == 2 else (2 if next_tier == 3 else 0),
+			"can_afford": economy_enabled and next_tier < tiers.size() and gold >= next_cost,
+			"favor": int(guild_favor.get(guild_id, 0)),
+			"usage": int(guild_usage.get(guild_id, 0)),
 		})
 	return result
 
@@ -697,6 +887,7 @@ func get_snapshot() -> Dictionary:
 			"slot": u.slot,
 			"target_id": u.target_id,
 			"is_elite": u.is_elite,
+			"is_target": u.is_target,
 			"manual_order": u.manual_order,
 			"hold_position": u.hold_position,
 			"move_target_x": u.move_target_x,
@@ -722,24 +913,36 @@ func get_snapshot() -> Dictionary:
 		"projectiles": projectile_data,
 		"finished": finished,
 		"winner": winner,
+		"stars": get_stars(),
 		"player_base_x": player_base_x,
 		"enemy_base_x": enemy_base_x,
 		"lane_count": lane_count,
 		"world_width": 1600.0,
 		"advance_lines": advance_lines.duplicate(),
 		"level_name": String(level.get("name", "Sandbox")),
+		"contract": int(level.get("contract", 0)),
+		"brief": String(level.get("brief", "")),
 		"gold": int(floor(gold)),
 		"gold_exact": gold,
-		"income": income_per_sec,
+		"stipend": stipend,
+		"income": stipend,
 		"pop_used": get_pop_used(),
 		"pop_max": pop_max,
+		"fame": fame,
+		"target_kills": target_kills,
+		"rep_rank": rep_rank,
+		"promo_kills": int(PROMO_KILLS[rep_rank]) if rep_rank < 3 else 0,
+		"promo_cost": int(PROMO_COST[rep_rank]) if rep_rank < 3 else 0,
 		"catalog": _catalog(),
+		"guilds": _guild_snapshot(),
+		"guild_usage": guild_usage.duplicate(),
 		"cooldowns": [spawn_cd[0].duplicate(), spawn_cd[1].duplicate()],
-		"buildings": _building_snapshot(),
-		"wave_index": next_wave_index,
-		"wave_count": wave_count,
-		"next_wave_in": _next_wave_in(),
+		"wave_index": endless_wave if endless_mode else next_wave_index,
+		"wave_count": 0 if endless_mode else wave_count,
+		"next_wave_in": endless_timer if endless_mode else _next_wave_in(),
+		"kills": kills,
+		"score": (endless_wave * 100 + kills * 10 + int(base_hp[PLAYER]) * 50) if endless_mode else 0,
 		"message": wave_message,
 		"error": last_error,
-		"mode": "defense" if defense_mode else "debug",
+		"mode": "endless" if endless_mode else ("defense" if defense_mode else "debug"),
 	}

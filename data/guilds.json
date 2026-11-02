@@ -1,0 +1,35 @@
+{
+  "iron": {
+    "name": "Iron Oath",
+    "short": "IRON",
+    "unlock_after": 0,
+    "tiers": [
+      {"cost": 30, "cap": 1, "units": ["swordsman"]},
+      {"cost": 60, "cap": 2, "units": ["spearman"]},
+      {"cost": 110, "cap": 2, "units": ["knight"]},
+      {"cost": 160, "cap": 1, "units": []}
+    ]
+  },
+  "verdant": {
+    "name": "Verdant Lodge",
+    "short": "VERDANT",
+    "unlock_after": 1,
+    "tiers": [
+      {"cost": 30, "cap": 1, "units": ["archer"]},
+      {"cost": 60, "cap": 2, "units": ["rogue"]},
+      {"cost": 110, "cap": 2, "units": ["catapult"]},
+      {"cost": 160, "cap": 1, "units": []}
+    ]
+  },
+  "arcane": {
+    "name": "Arcane Circle",
+    "short": "ARCANE",
+    "unlock_after": 2,
+    "tiers": [
+      {"cost": 30, "cap": 1, "units": ["mage"]},
+      {"cost": 60, "cap": 2, "units": ["cleric"]},
+      {"cost": 110, "cap": 2, "units": []},
+      {"cost": 160, "cap": 1, "units": []}
+    ]
+  }
+}
