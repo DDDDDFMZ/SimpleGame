@@ -1,78 +1,35 @@
 {
-	"version": 1,
-	"id": "mistmarsh_road",
-	"name": "Mistmarsh Hunting Trail",
-	"name_cn": "雾沼猎径",
+	"version": 2,
+	"id": "mistmarsh_crossroads",
+	"name": "Mistmarsh Crossroads",
+	"name_cn": "雾沼三岔口",
 	"world": {
 		"width": 1600.0,
-		"height": 360.0
+		"height": 900.0
 	},
-	"bases": [
-		{
-			"id": "player",
-			"team": 0,
-			"name": "Grey Crow Camp",
-			"name_cn": "灰鸦营地",
-			"x": 80.0
-		},
-		{
-			"id": "enemy",
-			"team": 1,
-			"name": "Red Banner Camp",
-			"name_cn": "赤旗猎场",
-			"x": 1520.0
-		}
+	"nodes": [
+		{"id": "p_base", "type": "base", "team": 0, "name_cn": "灰鸦营地", "pos": [140.0, 450.0]},
+		{"id": "e_base", "type": "base", "team": 1, "name_cn": "赤旗猎场", "pos": [1460.0, 450.0]},
+		{"id": "j_north", "type": "junction", "name_cn": "北岔口", "pos": [700.0, 260.0]},
+		{"id": "j_mid", "type": "junction", "name_cn": "中岔口", "pos": [800.0, 450.0]},
+		{"id": "j_south", "type": "junction", "name_cn": "南岔口", "pos": [700.0, 640.0]}
 	],
-	"routes": [
-		{
-			"id": 0,
-			"name": "Marsh North",
-			"name_cn": "雾沼北路",
-			"y": 104.0,
-			"player_spawn_x": 92.0,
-			"enemy_spawn_x": 1508.0,
-			"segments": [
-				{
-					"from": 80.0,
-					"to": 680.0,
-					"width": 72.0
-				},
-				{
-					"from": 680.0,
-					"to": 1040.0,
-					"width": 56.0
-				},
-				{
-					"from": 1040.0,
-					"to": 1520.0,
-					"width": 72.0
-				}
-			]
-		},
-		{
-			"id": 1,
-			"name": "Marsh South",
-			"name_cn": "雾沼南路",
-			"y": 252.0,
-			"player_spawn_x": 92.0,
-			"enemy_spawn_x": 1508.0,
-			"segments": [
-				{
-					"from": 80.0,
-					"to": 560.0,
-					"width": 64.0
-				},
-				{
-					"from": 560.0,
-					"to": 1080.0,
-					"width": 88.0
-				},
-				{
-					"from": 1080.0,
-					"to": 1520.0,
-					"width": 64.0
-				}
-			]
-		}
+	"edges": [
+		{"id": "p_jn", "from": "p_base", "to": "j_north", "width": 72.0, "name_cn": "雾沼北路"},
+		{"id": "p_jm", "from": "p_base", "to": "j_mid", "width": 88.0, "name_cn": "雾沼中路"},
+		{"id": "p_js", "from": "p_base", "to": "j_south", "width": 72.0, "name_cn": "雾沼南路"},
+		{"id": "jn_e", "from": "j_north", "to": "e_base", "width": 64.0, "name_cn": "北猎径"},
+		{"id": "jm_e", "from": "j_mid", "to": "e_base", "width": 80.0, "name_cn": "中猎径"},
+		{"id": "js_e", "from": "j_south", "to": "e_base", "width": 64.0, "name_cn": "南猎径"},
+		{"id": "jn_jm", "from": "j_north", "to": "j_mid", "width": 48.0, "name_cn": "北横径"},
+		{"id": "jm_js", "from": "j_mid", "to": "j_south", "width": 48.0, "name_cn": "南横径"}
+	],
+	"spawns": [
+		{"id": "north", "team": 0, "base": "p_base", "entry": "p_jn", "name_cn": "雾沼北路"},
+		{"id": "mid", "team": 0, "base": "p_base", "entry": "p_jm", "name_cn": "雾沼中路"},
+		{"id": "south", "team": 0, "base": "p_base", "entry": "p_js", "name_cn": "雾沼南路"},
+		{"id": "enemy_north", "team": 1, "base": "e_base", "entry": "jn_e", "name_cn": "敌方北路"},
+		{"id": "enemy_mid", "team": 1, "base": "e_base", "entry": "jm_e", "name_cn": "敌方中路"},
+		{"id": "enemy_south", "team": 1, "base": "e_base", "entry": "js_e", "name_cn": "敌方南路"}
 	]
 }

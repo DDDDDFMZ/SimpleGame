@@ -5,10 +5,15 @@ var data: Dictionary = {}
 var selected: bool = false
 
 
-func update_data(p_data: Dictionary, lane_y: float) -> void:
+func update_data(p_data: Dictionary) -> void:
 	data = p_data
-	var slot := int(data.get("slot", 0))
-	position = Vector2(float(data["x"]), lane_y + (slot - 1) * 6.0)
+	var pos_value: Variant = data.get("pos", [0.0, 0.0])
+	if pos_value is Array and pos_value.size() >= 2:
+		position = Vector2(float(pos_value[0]), float(pos_value[1]))
+	else:
+		position = Vector2(float(data.get("x", 0.0)), float(data.get("y", 0.0)))
+	if bool(data.get("waiting", false)):
+		position += Vector2(0.0, -8.0)
 	queue_redraw()
 
 
@@ -22,12 +27,10 @@ func set_selected(value: bool) -> void:
 func _draw() -> void:
 	if data.is_empty():
 		return
-
 	var team := int(data.get("team", 0))
 	var color := Color("#3B6EA5") if team == 0 else Color("#A53B3B")
 	var bar_color := Color("#6FA8DC") if team == 0 else Color("#E06666")
 
-	# Placeholder body: 14x20 rectangle, not final art.
 	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), color)
 	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), Color(0.0, 0.0, 0.0, 0.45), false, 1.0)
 	if bool(data.get("is_elite", false)):
@@ -39,8 +42,9 @@ func _draw() -> void:
 		]), Color("#F0C75E"))
 	if selected:
 		draw_arc(Vector2(0.0, 0.0), 12.0, 0.0, TAU, 16, Color("#D9A441"), 1.5)
+	if bool(data.get("waiting", false)):
+		draw_arc(Vector2(0.0, 0.0), 9.0, 0.0, TAU, 12, Color("#8A8498"), 1.0)
 
-	# Simple attack-type glyph for debugging.
 	var attack_type := String(data.get("attack_type", "melee"))
 	var glyph_color := Color(1.0, 1.0, 1.0, 0.8)
 	match attack_type:

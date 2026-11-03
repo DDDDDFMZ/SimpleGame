@@ -3,10 +3,29 @@ extends RefCounted
 
 var id: int
 var team: int
-var lane: int
 var def_id: String
 var def: Dictionary
-var x: float
+var pos: Vector2 = Vector2.ZERO
+var x: float = 0.0
+var y: float = 0.0
+
+var node_id: String = ""
+var edge_id: String = ""
+var edge_s: float = 0.0
+var edge_dir: int = 1
+var path: Array = []
+var path_index: int = 0
+var goal_node: String = ""
+var goal_dirty: bool = true
+var forced_entry: String = ""
+var route_id: String = ""
+var station_rank: int = 0
+var station_slot: int = -1
+var waiting: bool = false
+var wait_node: String = ""
+var wait_edge: String = ""
+var wait_path_index: int = 0
+var wait_time: float = 0.0
 
 var hp: float
 var max_hp: float
@@ -31,7 +50,9 @@ var is_elite: bool = false
 var is_target: bool = false
 var spawn_wave: int = 0
 var manual_order: bool = false
-var move_target_x: float = 0.0
+var target_point: Vector2 = Vector2.ZERO
+var target_edge_id: String = ""
+var target_edge_s: float = -1.0
 var hold_position: bool = false
 var at_base: bool = false
 var combat_cooldown: float = 0.0
@@ -41,13 +62,14 @@ var heal_interval: float = 0.0
 var heal_range: float = 0.0
 
 
-func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Dictionary, p_x: float, p_elite: bool = false, p_target: bool = false) -> void:
+func _init(p_id: int, p_team: int, p_def_id: String, p_def: Dictionary, p_pos: Vector2, p_elite: bool = false, p_target: bool = false) -> void:
 	id = p_id
 	team = p_team
-	lane = p_lane
 	def_id = p_def_id
 	def = p_def
-	x = p_x
+	pos = p_pos
+	x = p_pos.x
+	y = p_pos.y
 	is_elite = p_elite
 	is_target = p_target
 
@@ -63,7 +85,13 @@ func _init(p_id: int, p_team: int, p_lane: int, p_def_id: String, p_def: Diction
 	armor_type = String(def.get("armor_type", "light"))
 	passive = String(def.get("passive", ""))
 	projectile_speed = float(def.get("projectile_speed", 0.0))
-	aggro_range = maxf(100.0, attack_range + 20.0)
+	aggro_range = maxf(110.0, attack_range + 30.0)
 	heal_amount = float(def.get("heal_amount", 0.0))
 	heal_interval = float(def.get("heal_interval", 0.0))
 	heal_range = float(def.get("heal_range", 0.0))
+
+
+func set_position(new_pos: Vector2) -> void:
+	pos = new_pos
+	x = new_pos.x
+	y = new_pos.y

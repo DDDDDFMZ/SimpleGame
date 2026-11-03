@@ -1,16 +1,13 @@
 class_name BattleView
 extends Node2D
 
-const LANE_Y := [110.0, 250.0]
-const WORLD_W := 1600.0
+const VIEW_W := 640.0
 const VIEW_H := 360.0
-const PLAYER_BASE_X := 80.0
-const ENEMY_BASE_X := 1520.0
 
 var runner: SimRunner
 var unit_views: Dictionary = {}
 var last_snapshot: Dictionary = {}
-var active_lane: int = 0
+var active_route: int = 0
 var selected_ids: Array = []
 var drag_world_rect: Rect2 = Rect2()
 var drag_active: bool = false
@@ -29,8 +26,8 @@ func setup(p_runner: SimRunner) -> void:
 		runner.ticked.connect(_on_ticked)
 
 
-func set_active_lane(lane: int) -> void:
-	active_lane = clampi(lane, 0, maxi(0, _lane_count() - 1))
+func set_active_route(index: int) -> void:
+	active_route = maxi(0, index)
 	queue_redraw()
 
 
@@ -63,22 +60,6 @@ func _on_ticked(snapshot: Dictionary) -> void:
 	queue_redraw()
 
 
-func _lane_count() -> int:
-	var map: Dictionary = last_snapshot.get("map", {})
-	var routes: Array = map.get("routes", [])
-	if routes.is_empty():
-		return LANE_Y.size()
-	return mini(routes.size(), LANE_Y.size())
-
-
-func lane_y(lane: int) -> float:
-	var map: Dictionary = last_snapshot.get("map", {})
-	var routes: Array = map.get("routes", [])
-	if lane >= 0 and lane < routes.size():
-		return float(routes[lane].get("y", LANE_Y[clampi(lane, 0, LANE_Y.size() - 1)]))
-	return float(LANE_Y[clampi(lane, 0, LANE_Y.size() - 1)])
-
-
 func _sync_units(units_data: Array) -> void:
 	var seen := {}
 	for data in units_data:
@@ -91,8 +72,7 @@ func _sync_units(units_data: Array) -> void:
 			view = UnitView.new()
 			add_child(view)
 			unit_views[id] = view
-		var lane := clampi(int(data.get("lane", 0)), 0, maxi(0, _lane_count() - 1))
-		view.update_data(data, lane_y(lane))
+		view.update_data(data)
 		view.set_selected(selected_ids.has(id))
 
 	for id in unit_views.keys():
@@ -103,83 +83,94 @@ func _sync_units(units_data: Array) -> void:
 
 func _draw() -> void:
 	var map: Dictionary = last_snapshot.get("map", {})
-	var routes: Array = map.get("routes", [])
-	var world_w := float(map.get("world_width", last_snapshot.get("world_width", WORLD_W)))
-	var world_h := float(map.get("world_height", last_snapshot.get("world_height", VIEW_H)))
-	var player_base := float(last_snapshot.get("player_base_x", PLAYER_BASE_X))
-	var enemy_base := float(last_snapshot.get("enemy_base_x", ENEMY_BASE_X))
-	var lane_count := _lane_count()
-	if routes.is_empty():
-		routes = _default_routes(world_h)
+	var world_w := float(last_snapshot.get("world_width", map.get("world_width", 1600.0)))
+	var world_h := float(last_snapshot.get("world_height", map.get("world_height", 900.0)))
+	draw_rect(Rect2(0.0, 0.0, world_w, world_h), Color("#1A2024"))
+	draw_rect(Rect2(0.0, 0.0, world_w, world_h), Color("#26323A"), false, 2.0)
+	_draw_grid(world_w, world_h)
 
-	# Background and world bound.
-	draw_rect(Rect2(0.0, 0.0, world_w, world_h), Color("#1E1A2B"))
-	draw_rect(Rect2(0.0, 0.0, world_w, world_h), Color("#2A2635"), false, 1.0)
+	var nodes: Array = map.get("nodes", [])
+	var edges: Array = map.get("edges", [])
+	var route_paths := _route_paths()
+	var active_path: Array = []
+	var routes: Array = last_snapshot.get("routes", [])
+	if active_route >= 0 and active_route < routes.size():
+		active_path = routes[active_route].get("path", [])
 
-	# Roads are drawn as width segments so the map data is visible at a glance.
-	for i in range(mini(routes.size(), lane_count)):
-		var route: Dictionary = routes[i]
-		var y := float(route.get("y", LANE_Y[i]))
-		var segments: Array = route.get("segments", [])
-		for segment in segments:
-			var from_x := float(segment.get("from", player_base))
-			var to_x := float(segment.get("to", enemy_base))
-			var width := float(segment.get("width", 80.0))
-			var road := Rect2(from_x, y - width * 0.5, to_x - from_x, width)
-			draw_rect(road, Color("#302C3D"))
-			draw_rect(road, Color("#3E3A4A"), false, 1.0)
-			if i == active_lane:
-				draw_rect(road, Color("#D9A441"), false, 2.0)
-		draw_line(Vector2(player_base, y), Vector2(enemy_base, y), Color(0.35, 0.33, 0.42, 0.8), 1.0)
-		var route_font: Font = font if font != null else ThemeDB.fallback_font
-		if route_font != null:
-			draw_string(route_font, Vector2(player_base + 10.0, y - float(route.get("segments", [{"width": 80}])[0].get("width", 80.0)) * 0.5 + 11.0), String(route.get("name_cn", route.get("name", "第%d路" % (i + 1)))), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#B8B0C8"))
+	for edge in edges:
+		var edge_id := String(edge.get("id", ""))
+		var points := _points(edge.get("points", []))
+		if points.size() < 2:
+			continue
+		var width := float(edge.get("width", 80.0))
+		var road_color := Color("#39453B")
+		var border_color := Color("#59665A")
+		if active_path.has(edge_id):
+			road_color = Color("#4A4230")
+			border_color = Color("#D9A441")
+		for i in range(1, points.size()):
+			draw_line(points[i - 1], points[i], border_color, width + 4.0)
+			draw_line(points[i - 1], points[i], road_color, width)
+			draw_line(points[i - 1], points[i], Color(0.62, 0.58, 0.45, 0.35), 1.0)
 
-	# Base gates.
-	var min_y := 320.0
-	var max_y := 40.0
+	for node in nodes:
+		var node_type := String(node.get("type", ""))
+		var pos := _point(node.get("pos", []))
+		var team := int(node.get("team", -1))
+		if node_type == "base":
+			var color := Color("#3B6EA5") if team == 0 else Color("#A53B3B")
+			draw_circle(pos, 26.0, color)
+			draw_circle(pos, 30.0, Color("#D9A441") if team == 0 else Color("#E06666"), false, 2.0)
+			draw_string(font, pos + Vector2(-28.0, -36.0), String(node.get("name_cn", "营地")), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, color)
+		else:
+			draw_circle(pos, 9.0, Color("#2A3230"))
+			draw_circle(pos, 9.0, Color("#6B7A69"), false, 1.0)
+
 	for route in routes:
-		min_y = minf(min_y, float(route.get("y", 180.0)) - 44.0)
-		max_y = maxf(max_y, float(route.get("y", 180.0)) + 44.0)
-	draw_rect(Rect2(player_base - 30.0, min_y, 30.0, max_y - min_y), Color("#2B4A6F"))
-	draw_rect(Rect2(enemy_base, min_y, 30.0, max_y - min_y), Color("#6F2B2B"))
-	var gate_font: Font = font if font != null else ThemeDB.fallback_font
-	if gate_font != null:
-		draw_string(gate_font, Vector2(player_base - 27.0, min_y + 12.0), "我方", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#D7E8FA"))
-		draw_string(gate_font, Vector2(enemy_base + 1.0, min_y + 12.0), "敌方", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#F4D2D2"))
+		var rally: Dictionary = route.get("rally", {})
+		var rally_pos := _point(rally.get("pos", []))
+		if rally_pos != Vector2.ZERO:
+			var is_active := active_route < routes.size() and String(route.get("id", "")) == String(routes[active_route].get("id", ""))
+			var color := Color("#D9A441") if is_active else Color("#8A8498")
+			draw_circle(rally_pos, 7.0, color, false, 2.0)
+			draw_line(rally_pos + Vector2(0, -6), rally_pos + Vector2(0, 6), color, 1.0)
+			draw_line(rally_pos + Vector2(-6, 0), rally_pos + Vector2(6, 0), color, 1.0)
 
-	# Advance lines.
-	var lines: Array = last_snapshot.get("advance_lines", [92.0, 92.0])
-	for i in range(mini(lines.size(), routes.size())):
-		var line_x := float(lines[i])
-		var y := float(routes[i].get("y", LANE_Y[clampi(i, 0, LANE_Y.size() - 1)]))
-		var width := float(routes[i].get("segments", [{"width": 80.0}])[0].get("width", 80.0))
-		draw_line(Vector2(line_x, y - width * 0.5 + 4.0), Vector2(line_x, y + width * 0.5 - 4.0), Color("#D9A441") if i == active_lane else Color(0.85, 0.65, 0.25, 0.45), 1.0)
-		draw_circle(Vector2(line_x, y - width * 0.5 + 2.0), 2.0, Color("#D9A441"))
-
-	# Projectiles are cheap to draw directly; no per-projectile node needed yet.
 	for p in last_snapshot.get("projectiles", []):
-		var lane := clampi(int(p.get("lane", 0)), 0, maxi(0, lane_count - 1))
+		var pos := _point(p.get("pos", []))
 		var color := Color("#D9A441") if int(p.get("team", 0)) == 0 else Color("#E06666")
-		draw_circle(Vector2(float(p.get("x", 0.0)), lane_y(lane)), 2.0, color)
+		draw_circle(pos, 3.0, color)
 
 	if drag_active:
 		draw_rect(drag_world_rect, Color(0.42, 0.66, 0.89, 0.14))
 		draw_rect(drag_world_rect, Color("#6FA8DC"), false, 1.0)
 
 
-func _default_routes(world_h: float) -> Array:
+func _draw_grid(world_w: float, world_h: float) -> void:
+	for x in range(0, int(world_w) + 1, 100):
+		draw_line(Vector2(x, 0), Vector2(x, world_h), Color(0.2, 0.24, 0.25, 0.35), 1.0)
+	for y in range(0, int(world_h) + 1, 100):
+		draw_line(Vector2(0, y), Vector2(world_w, y), Color(0.2, 0.24, 0.25, 0.35), 1.0)
+
+
+func _route_paths() -> Array:
 	var result: Array = []
-	for i in range(LANE_Y.size()):
-		var width := 80.0
-		var y := float(LANE_Y[i])
-		if y + width * 0.5 > world_h:
-			y = world_h - width * 0.5
-		result.append({
-			"id": i,
-			"name": "Lane %d" % (i + 1),
-			"name_cn": "第%d路" % (i + 1),
-			"y": y,
-			"segments": [{"from": PLAYER_BASE_X, "to": ENEMY_BASE_X, "width": width}],
-		})
+	for route in last_snapshot.get("routes", []):
+		result.append(route.get("path", []))
+	return result
+
+
+func _point(value: Variant) -> Vector2:
+	if value is Vector2:
+		return value
+	if value is Array and value.size() >= 2:
+		return Vector2(float(value[0]), float(value[1]))
+	return Vector2.ZERO
+
+
+func _points(values: Variant) -> Array:
+	var result: Array = []
+	if values is Array:
+		for value in values:
+			result.append(_point(value))
 	return result

@@ -1,8 +1,8 @@
 extends Node2D
 
+enum PauseMode { NONE, MENU, GUIDE, RESULT }
+
 const SEED := 12345
-const UNIT_ORDER := ["swordsman", "spearman", "knight", "archer", "rogue", "catapult", "mage", "cleric"]
-const CAMERA_DEFAULT_X := 320.0
 
 @onready var runner: SimRunner = $SimRunner
 @onready var view: BattleView = $BattleView
@@ -11,12 +11,14 @@ const CAMERA_DEFAULT_X := 320.0
 
 var sim: BattleSim
 var level_data: Dictionary = {}
-var active_lane: int = 0
+var active_route: int = 0
 var follow_camera: bool = true
 var selected_ids: Array = []
 var drag_world_start := Vector2.ZERO
 var result_recorded := false
-var paused_before_guide: bool = false
+var pause_mode: int = PauseMode.NONE
+var guide_return_mode: int = PauseMode.NONE
+var last_pointer_world := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -34,6 +36,9 @@ func _ready() -> void:
 	hud.world_right_click.connect(_on_world_right_click)
 	hud.result_action.connect(_on_result_action)
 	hud.selection_changed.connect(_on_hud_selection_changed)
+	hud.zoom_requested.connect(_on_zoom_requested)
+	hud.pause_action.connect(_on_pause_action)
+	hud.station_order_changed.connect(_on_station_order_changed)
 	_reset_and_start()
 
 
@@ -49,127 +54,157 @@ func _load_level() -> Dictionary:
 
 func _reset_and_start() -> void:
 	level_data = _load_level()
-	active_lane = 0
+	active_route = 0
 	follow_camera = true
 	selected_ids.clear()
 	result_recorded = false
+	pause_mode = PauseMode.NONE
 	sim = BattleSim.new(SEED, 20, 1, level_data, true, GameState.profile(), GameState.game_data)
 	runner.setup(sim)
+	runner.paused = false
 	view.reset_view()
-	view.set_active_lane(active_lane)
+	view.set_active_route(active_route)
 	view.set_selected(selected_ids)
-	camera.set_world_width(sim.world_width)
-	camera.jump_to(CAMERA_DEFAULT_X)
+	camera.set_world_size(Vector2(sim.world_width, sim.world_height))
+	camera.set_zoom_level(CameraRig.DEFAULT_ZOOM)
+	camera.focus_base(BattleSim.PLAYER, sim.get_snapshot())
 	hud.close_panel()
 	hud.set_guide(false)
 	hud.set_paused(false)
+	hud.set_pause_menu(false)
 	hud.set_selection(selected_ids)
-	hud.set_camera(camera.camera_x(), follow_camera)
-	hud.update_snapshot(sim.get_snapshot(), active_lane)
+	hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
+	hud.update_snapshot(sim.get_snapshot(), active_route)
 
 
 func _process(delta: float) -> void:
-	var pan := 0.0
+	if pause_mode != PauseMode.NONE or sim == null or sim.is_finished():
+		return
+	var pan := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A):
-		pan -= 1.0
+		pan.x -= 1.0
 	if Input.is_key_pressed(KEY_D):
-		pan += 1.0
-	if pan != 0.0:
+		pan.x += 1.0
+	if Input.is_key_pressed(KEY_W):
+		pan.y -= 1.0
+	if Input.is_key_pressed(KEY_S):
+		pan.y += 1.0
+	if pan != Vector2.ZERO:
 		follow_camera = false
-		camera.pan(pan * 600.0 * delta)
-		hud.set_camera(camera.camera_x(), follow_camera)
+		camera.pan(pan.normalized() * 600.0 * delta)
+		hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
 
 
 func _on_ticked(snapshot: Dictionary) -> void:
 	_clean_selection(snapshot)
-	if follow_camera:
-		camera.focus_lane(snapshot, active_lane)
-	hud.set_camera(camera.camera_x(), follow_camera)
+	if follow_camera and pause_mode == PauseMode.NONE:
+		camera.focus_route(snapshot, active_route)
+	hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
 	hud.set_selection(selected_ids)
-	hud.update_snapshot(snapshot, active_lane)
+	hud.update_snapshot(snapshot, active_route)
 
 	if bool(snapshot.get("finished", false)) and not result_recorded:
 		result_recorded = true
+		pause_mode = PauseMode.RESULT
+		runner.paused = true
 		if GameState.endless_mode:
 			GameState.record_endless(int(snapshot.get("score", 0)), int(snapshot.get("wave_index", 0)))
 		else:
 			GameState.record_result(int(snapshot.get("contract", 0)), int(snapshot.get("stars", 0)), snapshot.get("guild_usage", {}))
 
 
+func _route_count() -> int:
+	if sim == null:
+		return 0
+	return sim.player_spawns.size()
+
+
+func _route_id(index: int) -> String:
+	if sim == null:
+		return ""
+	var list: Array = sim.player_spawns
+	if index < 0 or index >= list.size():
+		return ""
+	return String(list[index].get("id", ""))
+
+
 func _on_hud_spawn(def_id: String) -> void:
-	if sim != null:
-		sim.queue_spawn(BattleSim.PLAYER, active_lane, def_id)
+	if sim != null and pause_mode == PauseMode.NONE and not sim.is_finished():
+		sim.queue_spawn(BattleSim.PLAYER, active_route, def_id)
 
 
 func _on_guild_action(guild_id: String) -> void:
-	if sim != null:
+	if sim != null and pause_mode == PauseMode.NONE:
 		sim.queue_guild_action(guild_id)
 
 
 func _on_promote() -> void:
-	if sim != null:
+	if sim != null and pause_mode == PauseMode.NONE:
 		sim.queue_promote()
 
 
-func _on_minimap_clicked(lane: int, world_x: float) -> void:
-	active_lane = clampi(lane, 0, 1)
-	view.set_active_lane(active_lane)
-	follow_camera = false
-	camera.jump_to(world_x)
-	hud.set_camera(camera.camera_x(), follow_camera)
-	if sim != null:
-		hud.update_snapshot(sim.get_snapshot(), active_lane)
-
-
-func _on_minimap_select(lane: int, x1: float, x2: float, additive: bool) -> void:
-	if sim == null:
+func _on_minimap_clicked(world_pos: Vector2) -> void:
+	if pause_mode != PauseMode.NONE:
 		return
-	active_lane = clampi(lane, 0, 1)
-	view.set_active_lane(active_lane)
+	follow_camera = false
+	camera.jump_to(world_pos)
+	hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
+	if sim != null:
+		hud.update_snapshot(sim.get_snapshot(), active_route)
+
+
+func _on_minimap_select(world_rect: Rect2, additive: bool) -> void:
+	if sim == null or pause_mode != PauseMode.NONE:
+		return
 	var snapshot := sim.get_snapshot()
 	if not additive:
 		selected_ids.clear()
 	for u in snapshot.get("units", []):
-		if int(u.get("team", 1)) != BattleSim.PLAYER or int(u.get("lane", -1)) != active_lane:
+		if int(u.get("team", 1)) != BattleSim.PLAYER:
 			continue
-		var x := float(u.get("x", 0.0))
-		if x >= x1 and x <= x2:
+		var pos := _unit_pos(u)
+		if world_rect.grow(10.0).has_point(pos):
 			var id := int(u.get("id", -1))
 			if id >= 0 and not selected_ids.has(id):
 				selected_ids.append(id)
 	_update_selection_view()
-	hud.update_snapshot(snapshot, active_lane)
+	hud.update_snapshot(snapshot, active_route)
 
 
-func _on_minimap_order(lane: int, world_x: float, shift: bool) -> void:
-	if sim == null:
+func _on_minimap_order(world_pos: Vector2, shift: bool) -> void:
+	if sim == null or pause_mode != PauseMode.NONE:
 		return
-	active_lane = clampi(lane, 0, 1)
-	view.set_active_lane(active_lane)
 	if shift:
-		sim.queue_set_advance_line(active_lane, world_x)
+		sim.queue_set_rally(active_route, world_pos)
 	elif not selected_ids.is_empty():
-		sim.queue_move_squad(selected_ids, world_x)
+		sim.queue_move_squad(selected_ids, world_pos)
 
 
 func _on_drag_started(screen_pos: Vector2) -> void:
+	if pause_mode != PauseMode.NONE:
+		return
 	drag_world_start = _screen_to_world(screen_pos)
+	last_pointer_world = drag_world_start
 	view.set_drag_rect(Rect2(drag_world_start, Vector2.ZERO), true)
 
 
 func _on_drag_updated(screen_pos: Vector2) -> void:
-	var end := _screen_to_world(screen_pos)
-	view.set_drag_rect(Rect2(drag_world_start, end - drag_world_start).abs(), true)
+	last_pointer_world = _screen_to_world(screen_pos)
+	view.set_drag_rect(Rect2(drag_world_start, last_pointer_world - drag_world_start).abs(), true)
 
 
 func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
+	if pause_mode != PauseMode.NONE:
+		view.set_drag_rect(Rect2(), false)
+		return
 	var end := _screen_to_world(screen_pos)
 	var rect := Rect2(drag_world_start, end - drag_world_start).abs()
 	view.set_drag_rect(Rect2(), false)
 	if sim == null:
 		return
 	var snapshot := sim.get_snapshot()
-	if rect.size.length() < 4.0:
+	var threshold := 6.0 / maxf(0.1, camera.zoom_level)
+	if rect.size.length() < threshold:
 		_select_at(end, additive, snapshot)
 	else:
 		if not additive:
@@ -177,9 +212,7 @@ func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
 		for u in snapshot.get("units", []):
 			if int(u.get("team", 1)) != BattleSim.PLAYER:
 				continue
-			var lane := clampi(int(u.get("lane", 0)), 0, 1)
-			var pos := Vector2(float(u.get("x", 0.0)), view.lane_y(lane))
-			if rect.has_point(pos):
+			if rect.has_point(_unit_pos(u)):
 				var id := int(u.get("id", -1))
 				if id >= 0 and not selected_ids.has(id):
 					selected_ids.append(id)
@@ -189,13 +222,12 @@ func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
 func _select_at(world_pos: Vector2, additive: bool, snapshot: Dictionary) -> void:
 	var best_id := -1
 	var best_dist := INF
+	var hit_radius := 16.0 / maxf(0.1, camera.zoom_level)
 	for u in snapshot.get("units", []):
 		if int(u.get("team", 1)) != BattleSim.PLAYER:
 			continue
-		var lane := clampi(int(u.get("lane", 0)), 0, 1)
-		var pos := Vector2(float(u.get("x", 0.0)), view.lane_y(lane))
-		var dist := pos.distance_to(world_pos)
-		if dist <= 24.0 and dist < best_dist:
+		var dist := _unit_pos(u).distance_to(world_pos)
+		if dist <= hit_radius and dist < best_dist:
 			best_dist = dist
 			best_id = int(u.get("id", -1))
 	if not additive:
@@ -206,13 +238,13 @@ func _select_at(world_pos: Vector2, additive: bool, snapshot: Dictionary) -> voi
 
 
 func _on_world_right_click(screen_pos: Vector2, shift: bool) -> void:
-	if sim == null:
+	if sim == null or pause_mode != PauseMode.NONE:
 		return
 	var world_pos := _screen_to_world(screen_pos)
 	if shift:
-		sim.queue_set_advance_line(active_lane, world_pos.x)
+		sim.queue_set_rally(active_route, world_pos)
 	elif not selected_ids.is_empty():
-		sim.queue_move_squad(selected_ids, world_pos.x)
+		sim.queue_move_squad(selected_ids, world_pos)
 
 
 func _clean_selection(snapshot: Dictionary) -> void:
@@ -235,6 +267,8 @@ func _update_selection_view() -> void:
 
 
 func _on_hud_selection_changed(ids: Array) -> void:
+	if sim == null:
+		return
 	var valid := {}
 	for u in sim.get_snapshot().get("units", []):
 		if int(u.get("team", 1)) == BattleSim.PLAYER:
@@ -247,26 +281,88 @@ func _on_hud_selection_changed(ids: Array) -> void:
 	_update_selection_view()
 
 
+func _on_station_order_changed(order: Array) -> void:
+	if sim != null:
+		sim.set_station_order(order)
+		GameState.set_station_order(order)
+		hud.update_snapshot(sim.get_snapshot(), active_route)
+
+
+func _unit_pos(unit: Dictionary) -> Vector2:
+	var value: Variant = unit.get("pos", [])
+	if value is Array and value.size() >= 2:
+		return Vector2(float(value[0]), float(value[1]))
+	return Vector2(float(unit.get("x", 0.0)), float(unit.get("y", 0.0)))
+
+
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform().affine_inverse() * screen_pos
 
 
-func _spawn_by_index(index: int, other_lane: bool) -> void:
-	if index < 0 or index >= UNIT_ORDER.size() or sim == null:
+func _on_zoom_requested(delta: float) -> void:
+	if pause_mode == PauseMode.RESULT:
 		return
-	var lane := 1 - active_lane if other_lane else active_lane
-	sim.queue_spawn(BattleSim.PLAYER, lane, UNIT_ORDER[index])
+	camera.zoom_by(delta)
+	hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
 
 
-func _set_lane(lane: int) -> void:
-	active_lane = clampi(lane, 0, 1)
-	view.set_active_lane(active_lane)
+func _set_route(index: int) -> void:
+	var count := _route_count()
+	if count <= 0:
+		return
+	active_route = posmod(index, count)
+	view.set_active_route(active_route)
 	follow_camera = true
 	if sim != null:
 		var snapshot := sim.get_snapshot()
-		camera.focus_lane(snapshot, active_lane)
-		hud.set_camera(camera.camera_x(), follow_camera)
-		hud.update_snapshot(snapshot, active_lane)
+		camera.focus_route(snapshot, active_route)
+		hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
+		hud.update_snapshot(snapshot, active_route)
+
+
+func _spawn_by_index(index: int, other_route: bool) -> void:
+	if index < 0 or index >= 8 or sim == null:
+		return
+	var route := (active_route + 1) % maxi(1, _route_count()) if other_route else active_route
+	sim.queue_spawn(BattleSim.PLAYER, route, _catalog_id(index))
+
+
+func _catalog_id(index: int) -> String:
+	if sim == null:
+		return ""
+	var catalog: Array = sim.get_snapshot().get("catalog", [])
+	if index < 0 or index >= catalog.size():
+		return ""
+	return String(catalog[index].get("id", ""))
+
+
+func _set_pause_mode(mode: int) -> void:
+	pause_mode = mode
+	runner.paused = mode != PauseMode.NONE or (sim != null and sim.is_finished())
+	hud.set_paused(mode == PauseMode.MENU)
+	hud.set_pause_menu(mode == PauseMode.MENU)
+	hud.set_guide(mode == PauseMode.GUIDE)
+	if mode != PauseMode.NONE:
+		view.set_drag_rect(Rect2(), false)
+
+
+func _on_pause_action(action: String) -> void:
+	match action:
+		"resume":
+			_set_pause_mode(PauseMode.NONE)
+		"guide":
+			guide_return_mode = PauseMode.MENU
+			_set_pause_mode(PauseMode.GUIDE)
+		"backup":
+			var backup_path := GameState.backup_progress("pause")
+			hud.set_pause_status("已备份当前进度" if backup_path != "" else "暂无存档可备份")
+		"station_order":
+			hud.open_station_order()
+		"restart":
+			_set_pause_mode(PauseMode.NONE)
+			_reset_and_start()
+		"levels":
+			get_tree().change_scene_to_file("res://main/level_select.tscn")
 
 
 func _on_result_action(action: String) -> void:
@@ -289,9 +385,24 @@ func _on_result_action(action: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
-
-	if hud.guide_open and (event.keycode == KEY_LEFT or event.keycode == KEY_RIGHT):
-		hud.change_guide_page(-1 if event.keycode == KEY_LEFT else 1)
+	if sim != null and sim.is_finished():
+		return
+	if pause_mode == PauseMode.GUIDE:
+		if event.keycode == KEY_LEFT or event.keycode == KEY_RIGHT:
+			hud.change_guide_page(-1 if event.keycode == KEY_LEFT else 1)
+			return
+		if event.keycode == KEY_F1 or event.keycode == KEY_ESCAPE or event.keycode == KEY_SPACE:
+			_set_pause_mode(guide_return_mode)
+			return
+		return
+	if pause_mode == PauseMode.MENU:
+		if event.keycode == KEY_ESCAPE or event.keycode == KEY_SPACE:
+			_set_pause_mode(PauseMode.NONE)
+		elif event.keycode == KEY_F1:
+			guide_return_mode = PauseMode.MENU
+			_set_pause_mode(PauseMode.GUIDE)
+		return
+	if pause_mode == PauseMode.RESULT:
 		return
 
 	match event.keycode:
@@ -299,9 +410,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			var index: int = event.keycode - KEY_1
 			_spawn_by_index(index, event.alt_pressed)
 		KEY_Q:
-			_set_lane(0)
+			_set_route(active_route - 1)
 		KEY_E:
-			_set_lane(1)
+			_set_route(active_route + 1)
 		KEY_B:
 			hud.toggle_panel()
 		KEY_H:
@@ -309,30 +420,34 @@ func _unhandled_input(event: InputEvent) -> void:
 				sim.queue_hold_squad(selected_ids)
 		KEY_R:
 			if event.ctrl_pressed:
-				_reset_and_start()
+				_set_pause_mode(PauseMode.MENU)
 			elif not selected_ids.is_empty():
 				sim.queue_return_squad(selected_ids)
 		KEY_F:
 			follow_camera = not follow_camera
 			if follow_camera and sim != null:
-				camera.focus_lane(sim.get_snapshot(), active_lane)
-			hud.set_camera(camera.camera_x(), follow_camera)
+				camera.focus_route(sim.get_snapshot(), active_route)
+			hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
 		KEY_F1:
-			if not hud.guide_open:
-				paused_before_guide = runner.paused
-				runner.paused = true
-			else:
-				runner.paused = paused_before_guide
-			hud.toggle_guide()
+			guide_return_mode = PauseMode.NONE
+			_set_pause_mode(PauseMode.GUIDE)
 		KEY_F2:
 			hud.toggle_checklist()
 		KEY_HOME:
 			follow_camera = false
-			camera.jump_to(CAMERA_DEFAULT_X)
-			hud.set_camera(camera.camera_x(), follow_camera)
+			camera.focus_base(BattleSim.PLAYER, sim.get_snapshot())
+			hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
+		KEY_MINUS:
+			camera.zoom_by(-CameraRig.ZOOM_STEP)
+			hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
+		KEY_EQUAL:
+			camera.zoom_by(CameraRig.ZOOM_STEP)
+			hud.set_camera(camera.camera_pos(), camera.zoom_level, follow_camera)
 		KEY_SPACE:
 			if sim != null and not sim.is_finished():
-				runner.paused = not runner.paused
-				hud.set_paused(runner.paused)
+				_set_pause_mode(PauseMode.MENU)
 		KEY_ESCAPE:
-			get_tree().change_scene_to_file("res://main/level_select.tscn")
+			if not hud.panel_open:
+				_set_pause_mode(PauseMode.MENU)
+			else:
+				hud.close_panel()

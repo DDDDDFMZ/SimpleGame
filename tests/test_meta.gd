@@ -41,6 +41,13 @@ func _initialize() -> void:
 	gs.record_endless(1234, 9)
 	_check(int(gs.best_endless.get("score", 0)) == 1234, "endless best score is saved")
 
+	gs.settings["station_order"] = ["archer", "swordsman", "mage"]
+	_check(gs.new_game(true), "new game writes a new profile")
+	_check(gs.unlocked_contracts == [1], "new game resets contract unlock")
+	_check(gs.stars.is_empty(), "new game resets stars")
+	_check(gs.station_order()[0] == "archer", "new game preserves station order")
+	_check(not gs.list_backups().is_empty(), "new game creates a backup")
+
 	if had_save:
 		var file := FileAccess.open(save_path, FileAccess.WRITE)
 		file.store_string(original_save)

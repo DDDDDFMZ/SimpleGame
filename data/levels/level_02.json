@@ -41,6 +41,11 @@
           "unit": "swordsman",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -63,6 +68,11 @@
           "unit": "rogue",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -85,6 +95,11 @@
           "unit": "archer",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -110,6 +125,11 @@
           "lane": 1,
           "elite": true,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -136,6 +156,11 @@
           "unit": "archer",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     }

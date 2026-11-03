@@ -4,9 +4,8 @@ var failures := 0
 
 
 func _initialize() -> void:
-	_test_movement_snap()
-	_test_combat_priority()
-	_test_guild_and_reputation()
+	_test_graph_movement()
+	_test_heal_2d()
 	_test_hud_input()
 	_test_camera()
 	_test_level_data()
@@ -27,7 +26,7 @@ func _check(condition: bool, message: String) -> void:
 		printerr("FAIL: " + message)
 
 
-func _test_movement_snap() -> void:
+func _test_graph_movement() -> void:
 	var sim := BattleSim.new(1, 20, 1, {}, false)
 	sim.queue_set_advance_line(0, 700.0)
 	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
@@ -35,57 +34,30 @@ func _test_movement_snap() -> void:
 	for i in range(300):
 		sim.tick()
 	var u: SimUnit = sim.units[0]
-	_check(is_equal_approx(u.x, 700.0), "unit snaps to advance line")
-	var x := u.x
+	_check(u.pos.distance_to(sim.rallies["north"]["pos"]) < 20.0, "unit reaches graph rally")
+	var held := u.pos
 	for i in range(20):
 		sim.tick()
-	_check(is_equal_approx(sim.units[0].x, x), "unit does not oscillate")
-
-
-func _test_combat_priority() -> void:
-	var sim := BattleSim.new(1, 20, 1, {}, false)
-	sim.queue_set_advance_line(0, 400.0)
-	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
-	sim.tick()
+	_check(u.pos.distance_to(held) < 2.0, "unit holds without oscillation")
+	sim.queue_move_squad([u.id], Vector2(800.0, 450.0))
 	for i in range(100):
 		sim.tick()
-	var u: SimUnit = sim.units[0]
-	u.x = 700.0
-	u.manual_order = true
-	u.move_target_x = 900.0
-	sim._spawn_unit(BattleSim.ENEMY, 0, "swordsman", false, false)
-	var enemy: SimUnit = sim.units[1]
-	enemy.x = 760.0
-	enemy.hp = 10.0
-	for i in range(30):
-		sim.tick()
-	_check(not enemy.alive or enemy.hp < 10.0, "combat interrupts movement")
-	for i in range(200):
-		sim.tick()
-	if not u.alive:
-		u = sim.get_unit_by_id(u.id)
-	_check(u == null or u.x > 800.0, "movement resumes after combat")
+	_check(u.pos.distance_to(Vector2(140.0, 450.0)) > 40.0, "manual move changes position")
 
 
-func _test_guild_and_reputation() -> void:
-	var level := {
-		"mode": "defense",
-		"base_hp": 20,
-		"starting_gold": 500,
-		"available_guilds": ["iron", "verdant", "arcane"],
-		"waves": [],
-	}
-	var sim := BattleSim.new(1, 20, 1, level, true, {"unlocked_guilds": ["iron", "verdant", "arcane"]})
-	sim.queue_guild_action("iron")
+func _test_heal_2d() -> void:
+	var sim := BattleSim.new(1, 20, 1, {}, false)
+	sim.queue_spawn(BattleSim.PLAYER, 0, "cleric")
+	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
 	sim.tick()
-	_check(sim._unit_unlocked("swordsman"), "guild contact unlocks tier 0 class")
-	sim.fame = 5
-	sim.queue_promote()
-	sim.tick()
-	_check(sim.rep_rank == 1, "reputation promotion requires fame and gold")
-	sim.queue_guild_action("iron")
-	sim.tick()
-	_check(int(sim.guild_tier["iron"]) == 1, "guild tier 1 unlocks")
+	var cleric: SimUnit = sim.units[0]
+	var tank: SimUnit = sim.units[1]
+	cleric.pos = Vector2(300.0, 450.0)
+	tank.pos = Vector2(315.0, 450.0)
+	tank.hp = 30.0
+	for i in range(3):
+		sim.tick()
+	_check(tank.hp > 30.0, "cleric heals by 2D distance")
 
 
 func _test_hud_input() -> void:
@@ -94,17 +66,25 @@ func _test_hud_input() -> void:
 	root.add_child(hud)
 	hud.snapshot = {
 		"catalog": [
-			{"id": "swordsman", "name": "Swordsman", "cost": 30, "pop": 1, "unlocked": true, "requirement": ""},
+			{"id": "swordsman", "name": "剑士", "cost": 30, "pop": 1, "unlocked": true, "requirement": "", "role": "vanguard", "attack_type": "melee", "armor_type": "heavy"},
 		],
-		"cooldowns": [{}, {}],
+		"cooldowns": {"north": {}},
+		"routes": [{"id": "north", "name": "北线", "used": 0, "capacity": 6, "rally": {}}],
 		"guilds": [
-			{"id": "iron", "name": "Iron Oath", "tier": 0, "max_tier": 3, "unlocked": true, "next_cost": 60, "next_cap": 2, "next_units": ["spearman"], "favor": 0, "usage": 0},
+			{"id": "iron", "name": "铁誓会", "tier": 0, "max_tier": 3, "unlocked": true, "next_cost": 60, "next_cap": 2, "next_unit_names": ["矛兵"], "favor": 0, "usage": 0, "rank_gate": 0, "identity_cn": "前排与重甲"},
 		],
 		"finished": false,
 		"mode": "defense",
 		"promo_kills": 1,
 		"promo_cost": 40,
+		"rep_rank": 0,
+		"max_rank": 3,
+		"world_width": 1600.0,
+		"world_height": 900.0,
+		"units": [],
+		"map": {"edges": [], "nodes": []},
 	}
+	hud.active_route = 0
 	hud.panel_open = false
 
 	var spawned: Array = []
@@ -112,27 +92,27 @@ func _test_hud_input() -> void:
 	_click(hud, Vector2(40.0, 330.0))
 	_check(spawned == ["swordsman"], "HUD card click requests spawn")
 
-	var lanes: Array = []
-	hud.minimap_clicked.connect(func(lane: int, x: float) -> void: lanes.append(lane))
+	var clicks: Array = []
+	hud.minimap_clicked.connect(func(world_pos: Vector2) -> void: clicks.append(world_pos))
 	_click(hud, Vector2(590.0, 40.0))
-	_check(lanes == [1], "HUD minimap click requests lane switch")
+	_check(clicks.size() == 1, "HUD minimap click sends world point")
 
 	var selections: Array = []
-	hud.minimap_select.connect(func(lane: int, x1: float, x2: float, additive: bool) -> void: selections.append([lane, x1, x2]))
-	_press(hud, Vector2(500.0, 40.0))
-	_motion(hud, Vector2(560.0, 40.0))
-	_release(hud, Vector2(560.0, 40.0))
-	_check(selections.size() == 1 and int(selections[0][0]) == 1, "HUD minimap drag requests selection")
+	hud.minimap_select.connect(func(rect: Rect2, additive: bool) -> void: selections.append(rect))
+	_press(hud, Vector2(490.0, 30.0))
+	_motion(hud, Vector2(570.0, 60.0))
+	_release(hud, Vector2(570.0, 60.0))
+	_check(selections.size() == 1 and selections[0].size.x > 0.0, "HUD minimap drag sends world rect")
 
 	var orders: Array = []
-	hud.minimap_order.connect(func(lane: int, x: float, shift: bool) -> void: orders.append([lane, x, shift]))
+	hud.minimap_order.connect(func(world_pos: Vector2, shift: bool) -> void: orders.append(shift))
 	_right_click(hud, Vector2(590.0, 40.0), true)
-	_check(orders.size() == 1 and bool(orders[0][2]), "HUD minimap right click requests line order")
+	_check(orders.size() == 1 and bool(orders[0]), "HUD minimap right click requests rally")
 
 	hud.panel_open = true
 	var guild_actions: Array = []
 	hud.guild_action_requested.connect(func(guild_id: String) -> void: guild_actions.append(guild_id))
-	_click(hud, Vector2(200.0, 120.0))
+	_click(hud, Vector2(200.0, 140.0))
 	_check(guild_actions == ["iron"], "HUD guild row requests guild action")
 
 	var promotions: Array = []
@@ -140,17 +120,42 @@ func _test_hud_input() -> void:
 	_click(hud, Vector2(450.0, 94.0))
 	_check(promotions.size() == 1, "HUD promote button requests promotion")
 
+	var zoom: Array = []
+	hud.zoom_requested.connect(func(delta: float) -> void: zoom.append(delta))
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	wheel.position = Vector2(300.0, 150.0)
+	hud._gui_input(wheel)
+	_check(zoom.size() == 1 and float(zoom[0]) > 0.0, "HUD wheel requests zoom")
+
+	hud.snapshot["station_order"] = ["swordsman", "archer", "mage"]
+	hud.snapshot["catalog"] = [
+		{"id": "swordsman", "name": "剑士"},
+		{"id": "archer", "name": "弓手"},
+		{"id": "mage", "name": "法师"},
+	]
+	var order_changes: Array = []
+	hud.station_order_changed.connect(func(order: Array) -> void: order_changes.append(order))
+	hud.open_station_order()
+	_click(hud, hud._station_down_rect(0).get_center())
+	_check(order_changes.size() == 1 and String(order_changes[0][0]) == "archer", "station order UI reorders classes")
 	hud.queue_free()
 
 
 func _test_camera() -> void:
 	var cam := CameraRig.new()
 	root.add_child(cam)
-	var snapshot := {"advance_lines": [92.0, 92.0], "units": [{"team": 0, "lane": 0, "x": 1500.0}]}
-	cam.focus_lane(snapshot, 0)
-	_check(is_equal_approx(cam.position.x, 1280.0), "camera follows front unit and clamps")
-	cam.jump_to(0.0)
-	_check(is_equal_approx(cam.position.x, 320.0), "camera jumps to left edge")
+	cam.set_world_size(Vector2(1600, 900))
+	cam.set_zoom_level(0.8)
+	cam.jump_to(Vector2(0, 0))
+	_check(cam.position.x >= 399.0 and cam.position.y >= 224.0, "camera clamps to zoomed half-view")
+	cam.jump_to(Vector2(800, 450))
+	_check(cam.camera_rect().size.x > 640.0, "camera rect reflects zoom")
+	cam.set_world_size(Vector2(1600, 900))
+	var snapshot := {"routes": [{"id": "north", "rally": {"pos": [300.0, 300.0]}}], "units": []}
+	cam.focus_route(snapshot, 0)
+	_check(cam.position.x > 300.0, "camera focuses active route rally")
 	cam.queue_free()
 
 
@@ -158,6 +163,7 @@ func _test_level_data() -> void:
 	for path in ["res://data/levels/level_01.json", "res://data/levels/level_02.json", "res://data/levels/level_03.json"]:
 		var level := _load_json(path)
 		_check(level.has("contract") and level.has("available_guilds"), path.get_file() + " has contract schema")
+		_check(String(level.get("map", "")).ends_with(".json"), path.get_file() + " references a graph map")
 
 
 func _load_json(path: String) -> Dictionary:

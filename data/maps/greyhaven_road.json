@@ -1,78 +1,29 @@
 {
-	"version": 1,
-	"id": "greyhaven_road",
-	"name": "Greyhaven Outer Road",
-	"name_cn": "灰港外环大道",
+	"version": 2,
+	"id": "greyhaven_crossroads",
+	"name": "Greyhaven Crossroads",
+	"name_cn": "灰港十字路",
 	"world": {
 		"width": 1600.0,
-		"height": 360.0
+		"height": 900.0
 	},
-	"bases": [
-		{
-			"id": "player",
-			"team": 0,
-			"name": "Grey Crow Camp",
-			"name_cn": "灰鸦营地",
-			"x": 80.0
-		},
-		{
-			"id": "enemy",
-			"team": 1,
-			"name": "Red Banner Camp",
-			"name_cn": "赤旗营地",
-			"x": 1520.0
-		}
+	"nodes": [
+		{"id": "p_base", "type": "base", "team": 0, "name_cn": "灰鸦营地", "pos": [140.0, 450.0]},
+		{"id": "e_base", "type": "base", "team": 1, "name_cn": "赤旗营地", "pos": [1460.0, 450.0]},
+		{"id": "j_north", "type": "junction", "name_cn": "北交汇", "pos": [760.0, 280.0]},
+		{"id": "j_south", "type": "junction", "name_cn": "南交汇", "pos": [760.0, 620.0]}
 	],
-	"routes": [
-		{
-			"id": 0,
-			"name": "North Road",
-			"name_cn": "北道",
-			"y": 110.0,
-			"player_spawn_x": 92.0,
-			"enemy_spawn_x": 1508.0,
-			"segments": [
-				{
-					"from": 80.0,
-					"to": 720.0,
-					"width": 80.0
-				},
-				{
-					"from": 720.0,
-					"to": 1120.0,
-					"width": 64.0
-				},
-				{
-					"from": 1120.0,
-					"to": 1520.0,
-					"width": 80.0
-				}
-			]
-		},
-		{
-			"id": 1,
-			"name": "South Road",
-			"name_cn": "南道",
-			"y": 250.0,
-			"player_spawn_x": 92.0,
-			"enemy_spawn_x": 1508.0,
-			"segments": [
-				{
-					"from": 80.0,
-					"to": 600.0,
-					"width": 64.0
-				},
-				{
-					"from": 600.0,
-					"to": 1100.0,
-					"width": 92.0
-				},
-				{
-					"from": 1100.0,
-					"to": 1520.0,
-					"width": 64.0
-				}
-			]
-		}
+	"edges": [
+		{"id": "p_jn", "from": "p_base", "to": "j_north", "width": 80.0, "name_cn": "北路"},
+		{"id": "jn_e", "from": "j_north", "to": "e_base", "width": 72.0, "name_cn": "北线"},
+		{"id": "p_js", "from": "p_base", "to": "j_south", "width": 80.0, "name_cn": "南路"},
+		{"id": "js_e", "from": "j_south", "to": "e_base", "width": 72.0, "name_cn": "南线"},
+		{"id": "jn_js", "from": "j_north", "to": "j_south", "width": 56.0, "name_cn": "南北横路"}
+	],
+	"spawns": [
+		{"id": "north", "team": 0, "base": "p_base", "entry": "p_jn", "name_cn": "北路"},
+		{"id": "south", "team": 0, "base": "p_base", "entry": "p_js", "name_cn": "南路"},
+		{"id": "enemy_north", "team": 1, "base": "e_base", "entry": "jn_e", "name_cn": "敌方北路"},
+		{"id": "enemy_south", "team": 1, "base": "e_base", "entry": "js_e", "name_cn": "敌方南路"}
 	]
 }

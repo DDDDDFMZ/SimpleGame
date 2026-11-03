@@ -111,6 +111,7 @@ func _load_units() -> void:
 			"heal_amount": float(row.get("heal_amount", "0")),
 			"heal_interval": float(row.get("heal_interval", "0")),
 			"heal_range": float(row.get("heal_range", "0")),
+			"station_rank": int(row.get("station_rank", str(sort_order))),
 			"sort_order": sort_order,
 			"notes": String(row.get("notes", "")),
 		}
@@ -139,6 +140,7 @@ func _load_guilds() -> void:
 			"name_cn": String(row.get("name_cn", row.get("name", guild_id))),
 			"short": String(row.get("short", guild_id)),
 			"short_cn": String(row.get("short_cn", row.get("short", guild_id))),
+			"identity_cn": String(row.get("identity_cn", "")),
 			"unlock_after": int(row.get("unlock_after", "0")),
 			"sort_order": int(row.get("sort_order", "0")),
 			"tiers": [],
@@ -323,11 +325,39 @@ func _validate() -> void:
 		"bounty_ratio", "elite_bounty_ratio", "favor_hp_damage_per_point",
 		"favor_cost_per_point", "favor_cap", "endless_budget_base",
 		"endless_budget_per_wave", "endless_budget_quadratic",
+		"road_capacity_px_per_unit", "road_capacity_max", "station_spacing",
 	]:
 		if not balance.has(required):
 			errors.append("%s: missing key %s" % [BALANCE_PATH, required])
 	if map_defs.is_empty():
 		errors.append("没有加载任何地图")
+	for level_path in level_defs:
+		var level: Dictionary = level_defs[level_path]
+		var map_path := String(level.get("map", ""))
+		var map: MapData = map_defs.get(map_path, null)
+		if map == null:
+			continue
+		var enemy_routes := map.spawns_for_team(1)
+		for wave in level.get("waves", []):
+			var default_route: Variant = wave.get("route", wave.get("lane", 0))
+			for spawn in wave.get("spawns", []):
+				var route_value: Variant = spawn.get("route", spawn.get("lane", default_route))
+				if not _route_value_exists(enemy_routes, route_value):
+					errors.append("%s: wave route %s is invalid" % [level_path, str(route_value)])
+				var unit_id := String(spawn.get("unit", ""))
+				if unit_id != "" and not unit_defs.has(unit_id):
+					errors.append("%s: unknown wave unit %s" % [level_path, unit_id])
+
+
+func _route_value_exists(routes: Array, value: Variant) -> bool:
+	if value is String:
+		for route in routes:
+			if String(route.get("id", "")) == String(value):
+				return true
+		return false
+	if value is int or value is float:
+		return int(value) >= 0 and int(value) < routes.size()
+	return false
 
 
 func _bool(text: String) -> bool:

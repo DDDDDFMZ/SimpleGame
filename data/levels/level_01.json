@@ -19,7 +19,7 @@
     "iron"
   ],
   "intro_message": "Press B, contact Iron Oath, then hold the line. Kill marked targets for fame.",
-  "intro_message_cn": "按 B 打开协会，与铁誓会建交，然后守住道路。击杀金色悬赏目标可提升名望。",
+  "intro_message_cn": "按 B 打开协会，与铁誓会建交，然后守住道路。击杀金色悬赏目标可提升功勋。",
   "waves": [
 	{
 	  "time": 20,

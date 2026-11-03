@@ -44,9 +44,11 @@ func _run_level(level: Dictionary, guilds: Array) -> Dictionary:
 	var lines_set := false
 
 	for i in range(18000):
+		var route_count := sim.player_spawns.size()
+		var use_routes := mini(route_count, 2)
 		if not lines_set:
-			sim.queue_set_advance_line(0, 800.0)
-			sim.queue_set_advance_line(1, 800.0)
+			for route_index in range(use_routes):
+				sim.queue_set_advance_line(route_index, 800.0)
 			lines_set = true
 
 		# Establish cheap contacts first; only expand when the war chest is healthy.
@@ -62,8 +64,8 @@ func _run_level(level: Dictionary, guilds: Array) -> Dictionary:
 			sim.queue_promote()
 
 		for def_id in SPAM:
-			sim.queue_spawn(BattleSim.PLAYER, 0, String(def_id))
-			sim.queue_spawn(BattleSim.PLAYER, 1, String(def_id))
+			for route_index in range(use_routes):
+				sim.queue_spawn(BattleSim.PLAYER, route_index, String(def_id))
 		sim.tick()
 		if sim.is_finished():
 			break

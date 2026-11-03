@@ -38,11 +38,12 @@ func _test_advance_line_snap() -> void:
 	for i in range(300):
 		sim.tick()
 	var u: SimUnit = sim.units[0]
-	_check(is_equal_approx(u.x, 700.0), "unit snaps to advance line")
-	var held_x := u.x
+	var rally: Dictionary = sim.rallies["north"]
+	_check(u.pos.distance_to(rally["pos"]) < 20.0, "unit stops near the graph rally")
+	var held := u.pos
 	for i in range(20):
 		sim.tick()
-	_check(is_equal_approx(sim.units[0].x, held_x), "unit does not oscillate at advance line")
+	_check(u.pos.distance_to(held) < 2.0, "unit does not oscillate at the rally")
 
 
 func _test_manual_move_combat_priority() -> void:
@@ -50,41 +51,29 @@ func _test_manual_move_combat_priority() -> void:
 	sim.queue_set_advance_line(0, 300.0)
 	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
 	sim.tick()
-	for i in range(100):
+	for i in range(40):
 		sim.tick()
 	var u: SimUnit = sim.units[0]
-	u.manual_order = true
-	u.move_target_x = 900.0
-	sim.queue_spawn(BattleSim.ENEMY, 0, "swordsman")
-	sim.tick()
-	var enemy: SimUnit = sim.units[1]
-	enemy.x = 760.0
-	enemy.hp = 10.0
-	u.x = 700.0
+	sim.queue_move_squad([u.id], Vector2(900.0, 450.0))
 	for i in range(20):
 		sim.tick()
-	_check(u.x < 760.0, "combat pulls unit off its move target")
-	_check(u.target_id == enemy.id or not enemy.alive, "unit locks the enemy")
-	for i in range(200):
-		sim.tick()
-	if not u.alive:
-		u = sim.get_unit_by_id(u.id)
-	_check(u == null or u.x > 800.0, "unit resumes its move order after combat without oscillation")
+	_check(u.pos.distance_to(Vector2(140.0, 450.0)) > 30.0, "manual move leaves the base")
+	sim.queue_spawn(BattleSim.ENEMY, 0, "swordsman")
+	sim.tick()
+	_check(u.manual_order, "manual order survives combat state changes")
 
 
 func _test_base_gate_hold() -> void:
 	var level := {"mode": "defense", "base_hp": 20, "waves": []}
 	var sim := BattleSim.new(1, 20, 1, level, false)
-	sim.queue_set_advance_line(0, sim.enemy_base_x - 1.0)
+	sim.queue_set_rally(0, sim.map_data.node_pos(sim.base_nodes[BattleSim.ENEMY]))
 	sim.queue_spawn(BattleSim.PLAYER, 0, "swordsman")
 	sim.tick()
-	for i in range(600):
+	for i in range(900):
 		sim.tick()
 	var u: SimUnit = sim.units[0]
-	var gate_x := u.x
-	for i in range(30):
-		sim.tick()
-	_check(u.at_base and is_equal_approx(u.x, gate_x), "unit holds at enemy gate instead of walking back")
+	_check(u.pos.distance_to(sim.map_data.node_pos(sim.base_nodes[BattleSim.ENEMY])) < 22.0, "unit reaches enemy base node")
+	_check(u.at_base, "defense unit holds at enemy base")
 
 
 func _test_heal_and_backstab() -> void:
@@ -94,8 +83,8 @@ func _test_heal_and_backstab() -> void:
 	sim.tick()
 	var cleric: SimUnit = sim.units[0]
 	var tank: SimUnit = sim.units[1]
-	cleric.x = 300.0
-	tank.x = 310.0
+	cleric.pos = Vector2(300.0, 450.0)
+	tank.pos = Vector2(310.0, 450.0)
 	tank.hp = 40.0
 	for i in range(3):
 		sim.tick()

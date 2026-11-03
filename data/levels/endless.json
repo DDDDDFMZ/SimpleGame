@@ -13,6 +13,6 @@
   "stipend": 3.0,
   "available_guilds": ["iron", "verdant", "arcane"],
   "intro_message": "Endless bounties. Hold both lanes; score = waves + kills + base.",
-  "intro_message_cn": "无尽悬赏。守住两路；得分 = 波数 + 击杀 + 剩余基地。",
+  "intro_message_cn": "无尽悬赏。守住路口；得分 = 波数 + 击杀 + 剩余基地。",
   "waves": []
 }

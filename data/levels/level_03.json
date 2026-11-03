@@ -9,7 +9,7 @@
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
-  "starting_gold": 220,
+  "starting_gold": 240,
   "stipend": 6.0,
   "star_thresholds": [
     12,
@@ -64,6 +64,11 @@
           "unit": "archer",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -86,6 +91,11 @@
           "unit": "mage",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -109,6 +119,11 @@
           "count": 1,
           "elite": true,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -135,6 +150,11 @@
           "unit": "knight",
           "count": 1,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     },
@@ -162,6 +182,11 @@
           "count": 1,
           "elite": true,
           "target": true
+        },
+        {
+          "unit": "archer",
+          "count": 1,
+          "lane": 1
         }
       ]
     }
