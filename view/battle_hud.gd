@@ -48,7 +48,7 @@ const PAUSE_BUTTONS := [
 	{"action": "resume", "label": "继续", "rect": Rect2(198.0, 102.0, 112.0, 26.0)},
 	{"action": "guide", "label": "战地指南", "rect": Rect2(330.0, 102.0, 112.0, 26.0)},
 	{"action": "backup", "label": "备份进度", "rect": Rect2(198.0, 134.0, 112.0, 26.0)},
-	{"action": "station_order", "label": "站位顺序", "rect": Rect2(330.0, 134.0, 112.0, 26.0)},
+	{"action": "settings", "label": "设置", "rect": Rect2(330.0, 134.0, 112.0, 26.0)},
 	{"action": "restart", "label": "重开本局", "rect": Rect2(198.0, 166.0, 112.0, 26.0)},
 	{"action": "levels", "label": "返回委托", "rect": Rect2(330.0, 166.0, 112.0, 26.0)},
 ]
@@ -538,6 +538,7 @@ func _draw_selection_panel() -> void:
 		sum_y += pos.y
 	var avg_x := sum_x / maxf(1.0, float(units.size()))
 	var avg_y := sum_y / maxf(1.0, float(units.size()))
+	var squad_info := _squad_for_units(units)
 	draw_string(font, panel.position + Vector2(8.0, 14.0), "选中 %d 名   生命 %d/%d" % [units.size(), int(total_hp), int(total_max)], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 8, Color("#E8D5A9"))
 
 	if units.size() == 1:
@@ -549,12 +550,19 @@ func _draw_selection_panel() -> void:
 		draw_string(font, panel.position + Vector2(8.0, 61.0), "位置：x=%d y=%d" % [int(pos.x), int(pos.y)], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#B8B0C8"))
 		draw_string(font, panel.position + Vector2(8.0, 75.0), "路段：%s" % ("排队" if bool(unit.get("waiting", false)) else edge_id), HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#B8B0C8"))
 		draw_string(font, panel.position + Vector2(8.0, 89.0), "状态：%s" % UIText.state_label(String(unit.get("state", ""))), HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#B8B0C8"))
-		draw_line(panel.position + Vector2(8.0, 100.0), panel.position + Vector2(180.0, 100.0), Color("#3E3A4A"), 1.0)
-		draw_string(font, panel.position + Vector2(8.0, 116.0), "右键 移动   H 驻守", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
-		draw_string(font, panel.position + Vector2(8.0, 132.0), "R 返回集结点", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+		var squad_text := _squad_text(squad_info)
+		if squad_text != "":
+			draw_string(font, panel.position + Vector2(8.0, 103.0), squad_text, HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#6FA8DC"))
+		draw_line(panel.position + Vector2(8.0, 112.0), panel.position + Vector2(180.0, 112.0), Color("#3E3A4A"), 1.0)
+		draw_string(font, panel.position + Vector2(8.0, 126.0), "右键 移动   H 驻守", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
+		draw_string(font, panel.position + Vector2(8.0, 141.0), "R 返回集结点", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#8A8498"))
 		return
 
-	draw_string(font, panel.position + Vector2(8.0, 29.0), "平均位置 x=%d y=%d" % [int(avg_x), int(avg_y)], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#8A8498"))
+	var squad_text := _squad_text(squad_info)
+	if squad_text != "":
+		draw_string(font, panel.position + Vector2(8.0, 29.0), squad_text, HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#6FA8DC"))
+	else:
+		draw_string(font, panel.position + Vector2(8.0, 29.0), "平均位置 x=%d y=%d" % [int(avg_x), int(avg_y)], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 7, Color("#8A8498"))
 	for i in range(SELECTION_TABS.size()):
 		var tab_rect := _selection_tab_rect(i)
 		var active := i == selection_tab
@@ -671,6 +679,43 @@ func _draw_result() -> void:
 		draw_rect(r, Color("#4A4658"), false, 1.0)
 		var label: String = {"retry": "重试", "next": "下一关", "levels": "委托列表"}[action]
 		_center_text_in(label, r, 8, Color("#E8D5A9"))
+
+
+func _squad_for_units(units: Array) -> Dictionary:
+	if units.is_empty():
+		return {}
+	var squad_id := int(units[0].get("squad_id", -1))
+	if squad_id < 0:
+		return {}
+	for squad in snapshot.get("squads", []):
+		if int(squad.get("id", -1)) == squad_id:
+			return squad
+	return {}
+
+
+func _squad_text(squad: Dictionary) -> String:
+	if squad.is_empty():
+		return ""
+	var route_name := String(squad.get("route_id", ""))
+	for route in snapshot.get("routes", []):
+		if String(route.get("id", "")) == route_name:
+			route_name = String(route.get("name", route_name))
+			break
+	var state := String(squad.get("state", ""))
+	var suffix := ""
+	if state == "waiting":
+		suffix = " · 等待"
+	elif state == "regroup":
+		suffix = " · 汇合"
+	elif state == "fighting":
+		suffix = " · 交战"
+	return "编队%s · %s · 速%d · 距%d%s" % [
+		route_name,
+		String(squad.get("leader_name", "")),
+		int(float(squad.get("speed_cap", 0.0))),
+		int(float(squad.get("spacing", 0.0))),
+		suffix,
+	]
 
 
 func _selected_units() -> Array:

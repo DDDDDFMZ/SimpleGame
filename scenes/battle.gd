@@ -8,6 +8,7 @@ const SEED := 12345
 @onready var view: BattleView = $BattleView
 @onready var camera: CameraRig = $CameraRig
 @onready var hud: BattleHUD = $HUD/Root
+@onready var settings_panel: SettingsPanel = $HUD/SettingsPanel
 
 var sim: BattleSim
 var level_data: Dictionary = {}
@@ -39,6 +40,8 @@ func _ready() -> void:
 	hud.zoom_requested.connect(_on_zoom_requested)
 	hud.pause_action.connect(_on_pause_action)
 	hud.station_order_changed.connect(_on_station_order_changed)
+	settings_panel.station_order_changed.connect(_on_station_order_changed)
+	settings_panel.closed.connect(_on_settings_closed)
 	_reset_and_start()
 
 
@@ -66,7 +69,7 @@ func _reset_and_start() -> void:
 	view.set_active_route(active_route)
 	view.set_selected(selected_ids)
 	camera.set_world_size(Vector2(sim.world_width, sim.world_height))
-	camera.set_zoom_level(CameraRig.DEFAULT_ZOOM)
+	camera.set_zoom_level(SettingsService.get_default_zoom())
 	camera.focus_base(BattleSim.PLAYER, sim.get_snapshot())
 	hud.close_panel()
 	hud.set_guide(false)
@@ -212,7 +215,9 @@ func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
 		for u in snapshot.get("units", []):
 			if int(u.get("team", 1)) != BattleSim.PLAYER:
 				continue
-			if rect.has_point(_unit_pos(u)):
+			var half := Vector2(float(u.get("body_width", 14.0)), float(u.get("body_height", 20.0))) * 0.5
+			var body_rect := Rect2(_unit_pos(u) - half, half * 2.0)
+			if rect.intersects(body_rect):
 				var id := int(u.get("id", -1))
 				if id >= 0 and not selected_ids.has(id):
 					selected_ids.append(id)
@@ -222,12 +227,14 @@ func _on_drag_finished(screen_pos: Vector2, additive: bool) -> void:
 func _select_at(world_pos: Vector2, additive: bool, snapshot: Dictionary) -> void:
 	var best_id := -1
 	var best_dist := INF
-	var hit_radius := 16.0 / maxf(0.1, camera.zoom_level)
 	for u in snapshot.get("units", []):
 		if int(u.get("team", 1)) != BattleSim.PLAYER:
 			continue
+		var half := Vector2(float(u.get("body_width", 14.0)), float(u.get("body_height", 20.0))) * 0.5
+		var padding := Vector2(3.0, 3.0) / maxf(0.1, camera.zoom_level)
+		var hit_rect := Rect2(_unit_pos(u) - half - padding, (half + padding) * 2.0)
 		var dist := _unit_pos(u).distance_to(world_pos)
-		if dist <= hit_radius and dist < best_dist:
+		if hit_rect.has_point(world_pos) and dist < best_dist:
 			best_dist = dist
 			best_id = int(u.get("id", -1))
 	if not additive:
@@ -286,6 +293,12 @@ func _on_station_order_changed(order: Array) -> void:
 		sim.set_station_order(order)
 		GameState.set_station_order(order)
 		hud.update_snapshot(sim.get_snapshot(), active_route)
+
+
+func _on_settings_closed() -> void:
+	if pause_mode == PauseMode.MENU:
+		hud.set_paused(true)
+		hud.set_pause_menu(true)
 
 
 func _unit_pos(unit: Dictionary) -> Vector2:
@@ -356,8 +369,10 @@ func _on_pause_action(action: String) -> void:
 		"backup":
 			var backup_path := GameState.backup_progress("pause")
 			hud.set_pause_status("已备份当前进度" if backup_path != "" else "暂无存档可备份")
-		"station_order":
-			hud.open_station_order()
+		"settings":
+			hud.set_paused(false)
+			hud.set_pause_menu(false)
+			settings_panel.open(0)
 		"restart":
 			_set_pause_mode(PauseMode.NONE)
 			_reset_and_start()
@@ -384,6 +399,8 @@ func _on_result_action(action: String) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	if settings_panel.visible:
 		return
 	if sim != null and sim.is_finished():
 		return

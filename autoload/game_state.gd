@@ -13,11 +13,11 @@ var best_endless: Dictionary = {"score": 0, "waves": 0}
 var endless_unlocked: bool = false
 var selected_contract: int = 1
 var endless_mode: bool = false
-var settings: Dictionary = {"ui_scale": 1.0, "station_order": []}
 var tutorial_seen: bool = false
 var load_status: String = "missing"
 var map_editor_auto_opened: bool = false
 var save_service_override: Node = null
+var settings_service_override: Node = null
 
 
 func _ready() -> void:
@@ -43,14 +43,13 @@ func _defaults() -> Dictionary:
 	if starting_guilds.is_empty():
 		starting_guilds = ["iron"]
 	return {
-		"version": 3,
+		"version": 4,
 		"unlocked_contracts": [1],
 		"stars": {},
 		"unlocked_guilds": starting_guilds,
 		"guild_favor": favor if not favor.is_empty() else {"iron": 0},
 		"best_endless": {"score": 0, "waves": 0},
 		"endless_unlocked": false,
-		"settings": {"ui_scale": 1.0, "station_order": _default_station_order()},
 		"tutorial_seen": false,
 	}
 
@@ -61,6 +60,14 @@ func _save_service() -> Node:
 	return get_node_or_null("/root/SaveService")
 
 
+func _settings_service() -> Node:
+	if settings_service_override != null:
+		return settings_service_override
+	if not is_inside_tree():
+		return null
+	return get_node_or_null("/root/SettingsService")
+
+
 func _load() -> void:
 	_ensure_data()
 	var save_service := _save_service()
@@ -68,13 +75,19 @@ func _load() -> void:
 	load_status = String(save_service.last_status) if save_service != null else "missing"
 	if loaded.is_empty():
 		loaded = _defaults()
-	elif int(loaded.get("version", 1)) < 3:
+	elif int(loaded.get("version", 1)) < 4:
 		var merged := _defaults()
 		for key in merged:
 			if loaded.has(key):
 				merged[key] = loaded[key]
-		merged["version"] = 3
+		merged["version"] = 4
 		loaded = merged
+	var settings_service := _settings_service()
+	if settings_service != null:
+		var legacy_settings: Variant = loaded.get("settings", {})
+		if legacy_settings is Dictionary:
+			settings_service.migrate_from_legacy(legacy_settings, _default_station_order())
+		settings_service.bind_unit_order(_default_station_order())
 	_apply_loaded(loaded)
 
 
@@ -89,9 +102,6 @@ func _apply_loaded(loaded: Dictionary) -> void:
 	guild_favor = loaded.get("guild_favor", {"iron": 0, "verdant": 0, "arcane": 0})
 	best_endless = loaded.get("best_endless", {"score": 0, "waves": 0})
 	endless_unlocked = bool(loaded.get("endless_unlocked", false))
-	settings = loaded.get("settings", {"ui_scale": 1.0, "station_order": _default_station_order()})
-	if not settings.has("station_order") or not (settings["station_order"] is Array) or settings["station_order"].is_empty():
-		settings["station_order"] = _default_station_order()
 	tutorial_seen = bool(loaded.get("tutorial_seen", false))
 	var order: Array = game_data.guild_order if game_data != null else ["iron"]
 	for guild_id in order:
@@ -104,14 +114,13 @@ func _apply_loaded(loaded: Dictionary) -> void:
 
 func save(make_backup: bool = true) -> bool:
 	var data := {
-		"version": 3,
+		"version": 4,
 		"unlocked_contracts": unlocked_contracts,
 		"stars": stars,
 		"unlocked_guilds": unlocked_guilds,
 		"guild_favor": guild_favor,
 		"best_endless": best_endless,
 		"endless_unlocked": endless_unlocked,
-		"settings": settings,
 		"tutorial_seen": tutorial_seen,
 	}
 	var save_service := _save_service()
@@ -148,13 +157,11 @@ func restore_backup(path: String) -> bool:
 	return true
 
 
-func new_game(preserve_settings: bool = true) -> bool:
+func new_game() -> bool:
 	var save_service := _save_service()
 	if save_service == null:
 		return false
 	var data := _defaults()
-	if preserve_settings:
-		data["settings"] = settings.duplicate(true)
 	data["tutorial_seen"] = false
 	var written: Dictionary = save_service.new_game_data(data)
 	if written.is_empty():
@@ -186,6 +193,10 @@ func profile() -> Dictionary:
 	}
 
 
+func default_station_order() -> Array:
+	return _default_station_order()
+
+
 func _default_station_order() -> Array:
 	_ensure_data()
 	if game_data == null:
@@ -207,22 +218,16 @@ func _default_station_order() -> Array:
 
 func station_order() -> Array:
 	_ensure_data()
-	var result: Array = []
-	var raw: Variant = settings.get("station_order", [])
-	if raw is Array:
-		for value in raw:
-			var def_id := String(value)
-			if game_data != null and game_data.unit_defs.has(def_id) and not result.has(def_id):
-				result.append(def_id)
-	for def_id in _default_station_order():
-		if not result.has(def_id):
-			result.append(String(def_id))
-	return result
+	var settings_service := _settings_service()
+	if settings_service != null:
+		return settings_service.station_order(_default_station_order())
+	return _default_station_order()
 
 
 func set_station_order(order: Array) -> void:
-	settings["station_order"] = order.duplicate()
-	save(false)
+	var settings_service := _settings_service()
+	if settings_service != null:
+		settings_service.set_station_order(order, _default_station_order())
 
 
 func get_level_path(contract_id: int) -> String:

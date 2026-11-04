@@ -506,12 +506,17 @@ func edge_width(edge_id: String) -> float:
 	return float(edge(edge_id).get("width", 80.0))
 
 
-func edge_capacity(edge_id: String, px_per_unit: float = 12.0, maximum: int = 12) -> int:
+func edge_slot_count(edge_id: String, slot_width: float = 14.0, padding: float = 1.0, maximum: int = 24) -> int:
 	var e := edge(edge_id)
 	var override := int(e.get("capacity_override", 0))
 	if override > 0:
-		return override
-	return clampi(int(floor(float(e.get("width", 80.0)) / maxf(1.0, px_per_unit))), 1, maximum)
+		return mini(override, maximum)
+	var usable := float(e.get("width", 80.0)) - padding * 2.0
+	return clampi(int(floor(usable / maxf(1.0, slot_width))), 1, maximum)
+
+
+func edge_capacity(edge_id: String, slot_width: float = 14.0, padding: float = 1.0) -> int:
+	return edge_slot_count(edge_id, slot_width, padding)
 
 
 func edge_other(edge_id: String, node_id: String) -> String:

@@ -4,18 +4,22 @@
 
 ## 当前状态
 
-M7：俯视节点图 + 多路线/交汇 + 摄像机缩放 + 道路容量/站位 + 存档备份 + 暂停菜单。
+M7.1（源码 0.7.1）：JSON 数值管线 + 统一设置 + 碰撞箱/共享槽位 + 小队编队/支援；不生成试玩包。
 
-- 3 委托 + 无尽；关卡选择/星级/存档 v3
+- 3 委托 + 无尽；关卡选择/星级/存档 v4
 - 8 职业、3 协会；关内金币/声望/协会；局外委托/协会解锁/人情
 - 俯视 2D 节点图：单玩家/单敌方基地，多出生路线与交汇；单位沿道路寻路并可反向
 - 相机 2D 平移/缩放 0.5–1.5×；2D 小地图与相机框同步；框选锚点可在道路外
-- 每条道路按宽度限制每方人数；满员在节点排队；兵种站位顺序默认来自 CSV，可在暂停菜单调整
-- 暂停菜单：继续/指南/备份进度/站位顺序/重开确认/返回确认
-- 存档：主档 + 轮换备份 + 恢复 + 新存档（新档前自动备份）
+- 道路碰撞槽位双方共享；满槽在节点排队；`body_width/body_height` 用于碰撞箱/渲染/选中
+- 小队编队：同路线最低速度、队首/队尾跟随、间距/等待/反向、跨路线分组、队长死亡提升
+- 远程支援/近战反击：友军受击时附近远程自动集火，不再因自身视野空而待机
+- 统一设置界面（关卡选择 `O` / 暂停菜单）：默认缩放、窗口缩放/全屏、站位顺序；独立 `user://settings.json`
+- 数值唯一来源为 `data/*.json`，CSV 已移除；地图编辑器只追加缺失出生口，不重排已有 id
+- 暂停菜单：继续/指南/备份进度/设置/重开确认/返回确认
+- 存档：主档 + 轮换备份 + 恢复 + 新存档（新档前自动备份）；恢复/新档不改设置
 - 全中文战斗 HUD、卡牌、tooltip、协会、结算、指南、关卡选择、地图编辑器
 - 调试节点图编辑器：F3（调试版）或 `--map-editor`；节点/边/基地/宽度/校验/保存
-- 自动试玩：C1 20/20、C2 6/20、C3 7/20、无尽 15 波
+- 自动试玩：C1 20/20、C2 5/20、C3 12/20、无尽 15 波（M7.1 支援规则后基线，真人待验证）
 - 占位矩形美术；无音频；玩家地图编辑器/多基地/2.5D 高度留后续
 
 ## 运行
@@ -45,6 +49,7 @@ M7：俯视节点图 + 多路线/交汇 + 摄像机缩放 + 道路容量/站位 
 | F / A-D-W-S / Home | 跟随/平移/回基地 |
 | B / Space / Esc | 协会 / 暂停菜单 / 打开暂停菜单 |
 | F1 / F2 | 战地指南（←/→ 翻页）/ 首局步骤 |
+| O（关卡选择/暂停菜单） | 设置：默认缩放、窗口缩放/全屏、站位顺序 |
 | S（关卡选择） | 存档/备份/新存档 |
 | F3（调试版） | 地图编辑器 |
 
@@ -62,11 +67,13 @@ M7：俯视节点图 + 多路线/交汇 + 摄像机缩放 + 道路容量/站位 
 "D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_m7_camera.gd
 "D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_m7_pause.gd
 "D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_m7_save.gd
+"D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_settings.gd
+"D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_m7_squad.gd
 "D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/test_flow.gd
 "D:/Godot_v4.7/Godot_v4.7-stable_win64.exe" --headless --path . --script tests/autoplay.gd
 ```
 
-自动试玩：C1 20/20、C2 6/20、C3 7/20；无尽 15 波。
+自动试玩：C1 20/20、C2 5/20、C3 12/20；无尽 15 波（第 15 波失守）。
 
 数据校验：
 
@@ -79,18 +86,22 @@ M7：俯视节点图 + 多路线/交汇 + 摄像机缩放 + 道路容量/站位 
 ## 目录
 
 ```text
-autoload/              GameState + SaveService
-data/balance/*.csv     数值唯一来源（含 station_rank）
+autoload/              GameState + SaveService + SettingsService
+data/units.json        职业数值/中文名/碰撞箱/站位顺序
+data/guilds.json       协会定位/解锁/T0-T3
+data/balance.json      经济/声望/容量/编队/支援全局数值
+data/counters.json     攻型×甲型克制
 data/maps/*.json       节点图地图（nodes/edges/spawns）
 data/campaign.json     委托/协会解锁
 data/levels/           3 委托 + 无尽
-main/level_select.*    关卡选择/存档备份面板
+main/level_select.*    关卡选择/存档备份/设置入口
 main/map_editor.*      调试节点图编辑器
 sim/                   纯逻辑模拟层 + GameData/MapData/MapGraph
+ui/settings_panel.*    共享设置模态
 ui/ui_text.gd          攻/甲/职业/被动中文标签
 view/                  HUD/2D 地图/相机/单位
 scenes/battle.tscn     战斗场景
-tests/                 数据/图/容量/相机/存档/暂停/试玩/截图
+tests/                 数据/图/容量/编队/设置/存档/暂停/试玩/截图
 Docs/                  完整 GDD
 ```
 

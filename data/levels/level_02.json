@@ -24,145 +24,155 @@
   "waves": [
     {
       "time": 20,
-      "lane": 0,
       "message": "Wave 1: ambush screen",
       "message_cn": "第 1 波：伏击前哨",
       "spawns": [
         {
           "unit": "swordsman",
-          "count": 3
+          "count": 3,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         },
         {
           "unit": "swordsman",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 70,
-      "lane": 0,
       "message": "Wave 2: arrows from the trees",
       "message_cn": "第 2 波：林间箭雨",
       "spawns": [
         {
           "unit": "archer",
-          "count": 3
+          "count": 3,
+          "route": "enemy_north"
         },
         {
           "unit": "rogue",
           "count": 2,
-          "lane": 1
+          "route": "enemy_south"
         },
         {
           "unit": "rogue",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 120,
-      "lane": 0,
       "message": "Wave 3: flankers",
       "message_cn": "第 3 波：侧翼包抄",
       "spawns": [
         {
           "unit": "swordsman",
-          "count": 4
+          "count": 4,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 3,
-          "lane": 1
+          "route": "enemy_south"
         },
         {
           "unit": "archer",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 170,
-      "lane": 0,
       "message": "Wave 4: the quartermaster",
       "message_cn": "第 4 波：军需官",
       "spawns": [
         {
           "unit": "swordsman",
           "count": 1,
-          "elite": true
+          "elite": true,
+          "route": "enemy_north"
         },
         {
           "unit": "rogue",
           "count": 3,
-          "lane": 1
+          "route": "enemy_south"
         },
         {
           "unit": "rogue",
           "count": 1,
-          "lane": 1,
           "elite": true,
-          "target": true
+          "target": true,
+          "route": "enemy_south"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 220,
-      "lane": 0,
       "message": "Wave 5: caravan road",
       "message_cn": "第 5 波：商队驿道",
       "spawns": [
         {
           "unit": "swordsman",
-          "count": 5
+          "count": 5,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 4,
-          "lane": 1
+          "route": "enemy_south"
         },
         {
           "unit": "spearman",
-          "count": 3
+          "count": 3,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_south"
         }
-      ]
+      ],
+      "route": "enemy_north"
     }
   ]
 }

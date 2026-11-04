@@ -34,7 +34,8 @@ func _test_graph_movement() -> void:
 	for i in range(300):
 		sim.tick()
 	var u: SimUnit = sim.units[0]
-	_check(u.pos.distance_to(sim.rallies["north"]["pos"]) < 20.0, "unit reaches graph rally")
+	var rally: Dictionary = sim.rallies["north"]
+	_check(u.edge_id == String(rally["edge_id"]) and absf(u.edge_s - float(rally["s"])) < 20.0, "unit reaches graph rally")
 	var held := u.pos
 	for i in range(20):
 		sim.tick()

@@ -15,10 +15,18 @@ func _initialize() -> void:
 	var save_service: Node = save_script.new()
 	save_service.name = "SaveService"
 	root.add_child(save_service)
+	var settings_script: Script = load("res://autoload/settings_service.gd")
+	var settings_service: Node = settings_script.new()
+	settings_service.name = "TestSettingsService"
+	settings_service.configure_paths("user://test_meta_settings.json")
+	root.add_child(settings_service)
+	settings_service.configure_paths("user://test_meta_settings.json")
+	settings_service.load_settings()
 	var gs_script: Script = load("res://autoload/game_state.gd")
 	var gs: Node = gs_script.new()
 	gs.name = "GameState"
 	gs.save_service_override = save_service
+	gs.settings_service_override = settings_service
 	root.add_child(gs)
 
 	gs.reset_progress()
@@ -41,8 +49,8 @@ func _initialize() -> void:
 	gs.record_endless(1234, 9)
 	_check(int(gs.best_endless.get("score", 0)) == 1234, "endless best score is saved")
 
-	gs.settings["station_order"] = ["archer", "swordsman", "mage"]
-	_check(gs.new_game(true), "new game writes a new profile")
+	gs.set_station_order(["archer", "swordsman", "mage"])
+	_check(gs.new_game(), "new game writes a new profile")
 	_check(gs.unlocked_contracts == [1], "new game resets contract unlock")
 	_check(gs.stars.is_empty(), "new game resets stars")
 	_check(gs.station_order()[0] == "archer", "new game preserves station order")
@@ -54,6 +62,7 @@ func _initialize() -> void:
 		file.close()
 	else:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_meta_settings.json"))
 
 	if failures == 0:
 		print("META TESTS PASS")

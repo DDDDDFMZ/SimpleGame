@@ -4,7 +4,7 @@ const SAVE_PATH := "user://save.json"
 const BACKUP_DIR := "user://backups"
 const CORRUPT_DIR := "user://corrupt"
 const MAX_BACKUPS := 8
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 var save_path: String = SAVE_PATH
 var backup_dir: String = BACKUP_DIR

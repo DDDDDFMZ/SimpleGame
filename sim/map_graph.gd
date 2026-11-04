@@ -53,10 +53,12 @@ func edge_start(edge_id: String, from_node: String) -> bool:
 	return String(edge(edge_id).get("from", "")) == from_node
 
 
-func shortest_path(from_node: String, to_node: String) -> Array:
+func shortest_path(from_node: String, to_node: String, blocked_edges: Array = []) -> Array:
 	if from_node == to_node:
 		return []
 	var cache_key := from_node + ">" + to_node
+	if not blocked_edges.is_empty():
+		cache_key += "!" + "|".join(PackedStringArray(blocked_edges))
 	if path_cache.has(cache_key):
 		return path_cache[cache_key].duplicate()
 	var dist: Dictionary = {}
@@ -80,6 +82,8 @@ func shortest_path(from_node: String, to_node: String) -> Array:
 		if current == to_node:
 			break
 		for edge_id in adjacency.get(current, []):
+			if blocked_edges.has(String(edge_id)):
+				continue
 			var next_node := edge_other(String(edge_id), current)
 			if next_node == "" or not unvisited.has(next_node):
 				continue

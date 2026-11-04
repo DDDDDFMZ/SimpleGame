@@ -1,0 +1,14 @@
+{
+  "melee": {
+    "light": 1.5,
+    "heavy": 0.75
+  },
+  "ranged": {
+    "light": 1.0,
+    "heavy": 1.0
+  },
+  "siege": {
+    "light": 0.5,
+    "heavy": 1.5
+  }
+}

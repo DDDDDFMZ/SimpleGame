@@ -26,6 +26,14 @@ func _initialize() -> void:
 	_check(scene.pause_mode == 1, "Esc opens pause instead of leaving")
 	scene._on_pause_action("resume")
 	_check(scene.pause_mode == 0 and not scene.runner.paused, "resume action unpauses")
+
+	_press_key(scene, KEY_SPACE)
+	scene._on_pause_action("settings")
+	_check(scene.settings_panel.visible, "pause settings opens shared overlay")
+	_check(scene.runner.paused and not hud.paused, "settings overlay keeps sim paused and hides pause overlay")
+	scene.settings_panel.close()
+	_check(scene.pause_mode == 1 and hud.paused and hud.pause_menu, "closing settings returns to pause menu")
+	scene._on_pause_action("resume")
 	scene.queue_free()
 	await process_frame
 	if failures == 0:

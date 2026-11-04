@@ -39,7 +39,7 @@ func _test_advance_line_snap() -> void:
 		sim.tick()
 	var u: SimUnit = sim.units[0]
 	var rally: Dictionary = sim.rallies["north"]
-	_check(u.pos.distance_to(rally["pos"]) < 20.0, "unit stops near the graph rally")
+	_check(u.edge_id == String(rally["edge_id"]) and absf(u.edge_s - float(rally["s"])) < 20.0, "unit stops near the graph rally")
 	var held := u.pos
 	for i in range(20):
 		sim.tick()

@@ -10,6 +10,13 @@ func _initialize() -> void:
 		printerr("GameState autoload missing")
 		quit(1)
 		return
+	select_scene._open_settings()
+	if not select_scene.settings_panel.visible:
+		printerr("settings overlay should open")
+		quit(1)
+		return
+	select_scene.settings_panel.close()
+	await process_frame
 	if not gs.select_contract(1):
 		printerr("contract 1 should be unlocked")
 		quit(1)

@@ -23,85 +23,95 @@
   "waves": [
 	{
 	  "time": 20,
-	  "lane": 0,
 	  "message": "Wave 1: Red Banner swords",
 	  "message_cn": "第 1 波：赤旗剑士",
 	  "spawns": [
 		{
 		  "unit": "swordsman",
-		  "count": 3
-		},
-		{
-		  "unit": "swordsman",
-		  "count": 1,
-		  "target": true
-		}
-	  ]
-	},
-	{
-	  "time": 65,
-	  "lane": 0,
-	  "message": "Wave 2: shields and spears",
-	  "message_cn": "第 2 波：盾与矛",
-	  "spawns": [
-		{
-		  "unit": "swordsman",
-		  "count": 4
-		},
-		{
-		  "unit": "spearman",
-		  "count": 3
-		},
-		{
-		  "unit": "spearman",
-		  "count": 1,
-		  "target": true
-		}
-	  ]
-	},
-	{
-	  "time": 115,
-	  "lane": 0,
-	  "message": "Wave 3: the tax captain",
-	  "message_cn": "第 3 波：收税队长",
-	  "spawns": [
-		{
-		  "unit": "swordsman",
-		  "count": 5
-		},
-		{
-		  "unit": "spearman",
-		  "count": 4
+		  "count": 3,
+		  "route": "enemy_north"
 		},
 		{
 		  "unit": "swordsman",
 		  "count": 1,
 		  "target": true,
-		  "elite": true
+		  "route": "enemy_north"
 		}
-	  ]
+	  ],
+	  "route": "enemy_north"
+	},
+	{
+	  "time": 65,
+	  "message": "Wave 2: shields and spears",
+	  "message_cn": "第 2 波：盾与矛",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 4,
+		  "route": "enemy_north"
+		},
+		{
+		  "unit": "spearman",
+		  "count": 3,
+		  "route": "enemy_north"
+		},
+		{
+		  "unit": "spearman",
+		  "count": 1,
+		  "target": true,
+		  "route": "enemy_north"
+		}
+	  ],
+	  "route": "enemy_north"
+	},
+	{
+	  "time": 115,
+	  "message": "Wave 3: the tax captain",
+	  "message_cn": "第 3 波：收税队长",
+	  "spawns": [
+		{
+		  "unit": "swordsman",
+		  "count": 5,
+		  "route": "enemy_north"
+		},
+		{
+		  "unit": "spearman",
+		  "count": 4,
+		  "route": "enemy_north"
+		},
+		{
+		  "unit": "swordsman",
+		  "count": 1,
+		  "target": true,
+		  "elite": true,
+		  "route": "enemy_north"
+		}
+	  ],
+	  "route": "enemy_north"
 	},
 	{
 	  "time": 170,
-	  "lane": 0,
 	  "message": "Wave 4: both lanes",
 	  "message_cn": "第 4 波：两路齐攻",
 	  "spawns": [
 		{
 		  "unit": "swordsman",
-		  "count": 6
+		  "count": 6,
+		  "route": "enemy_north"
 		},
 		{
 		  "unit": "spearman",
 		  "count": 4,
-		  "lane": 1
+		  "route": "enemy_south"
 		},
 		{
 		  "unit": "swordsman",
 		  "count": 1,
-		  "target": true
+		  "target": true,
+		  "route": "enemy_north"
 		}
-	  ]
+	  ],
+	  "route": "enemy_north"
 	}
   ]
 }

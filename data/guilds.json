@@ -1,35 +1,95 @@
 {
   "iron": {
     "name": "Iron Oath",
+    "name_cn": "铁誓会",
     "short": "IRON",
+    "short_cn": "铁誓",
+    "identity_cn": "前排与重甲",
     "unlock_after": 0,
+    "sort_order": 0,
     "tiers": [
-      {"cost": 30, "cap": 1, "units": ["swordsman"]},
-      {"cost": 60, "cap": 2, "units": ["spearman"]},
-      {"cost": 110, "cap": 2, "units": ["knight"]},
-      {"cost": 160, "cap": 1, "units": []}
+      {
+        "cost": 30,
+        "cap": 1,
+        "rank_gate": 0
+      },
+      {
+        "cost": 60,
+        "cap": 2,
+        "rank_gate": 0
+      },
+      {
+        "cost": 110,
+        "cap": 2,
+        "rank_gate": 1
+      },
+      {
+        "cost": 160,
+        "cap": 1,
+        "rank_gate": 2
+      }
     ]
   },
   "verdant": {
     "name": "Verdant Lodge",
+    "name_cn": "绿荫游侠团",
     "short": "VERDANT",
+    "short_cn": "绿荫",
+    "identity_cn": "远程与游击",
     "unlock_after": 1,
+    "sort_order": 1,
     "tiers": [
-      {"cost": 30, "cap": 1, "units": ["archer"]},
-      {"cost": 60, "cap": 2, "units": ["rogue"]},
-      {"cost": 110, "cap": 2, "units": ["catapult"]},
-      {"cost": 160, "cap": 1, "units": []}
+      {
+        "cost": 30,
+        "cap": 1,
+        "rank_gate": 0
+      },
+      {
+        "cost": 60,
+        "cap": 2,
+        "rank_gate": 0
+      },
+      {
+        "cost": 110,
+        "cap": 2,
+        "rank_gate": 1
+      },
+      {
+        "cost": 160,
+        "cap": 1,
+        "rank_gate": 2
+      }
     ]
   },
   "arcane": {
     "name": "Arcane Circle",
+    "name_cn": "星环秘法会",
     "short": "ARCANE",
+    "short_cn": "星环",
+    "identity_cn": "法术与治疗",
     "unlock_after": 2,
+    "sort_order": 2,
     "tiers": [
-      {"cost": 30, "cap": 1, "units": ["mage"]},
-      {"cost": 60, "cap": 2, "units": ["cleric"]},
-      {"cost": 110, "cap": 2, "units": []},
-      {"cost": 160, "cap": 1, "units": []}
+      {
+        "cost": 30,
+        "cap": 1,
+        "rank_gate": 0
+      },
+      {
+        "cost": 60,
+        "cap": 2,
+        "rank_gate": 0
+      },
+      {
+        "cost": 110,
+        "cap": 2,
+        "rank_gate": 1
+      },
+      {
+        "cost": 160,
+        "cap": 1,
+        "rank_gate": 2
+      }
     ]
   }
 }

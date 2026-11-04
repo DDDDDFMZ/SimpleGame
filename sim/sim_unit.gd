@@ -13,6 +13,8 @@ var node_id: String = ""
 var edge_id: String = ""
 var edge_s: float = 0.0
 var edge_dir: int = 1
+var lateral: float = 0.0
+var edge_slot: int = -1
 var path: Array = []
 var path_index: int = 0
 var goal_node: String = ""
@@ -21,6 +23,11 @@ var forced_entry: String = ""
 var route_id: String = ""
 var station_rank: int = 0
 var station_slot: int = -1
+var squad_id: int = -1
+var squad_rank: int = -1
+var squad_state: String = ""
+var squad_wait: bool = false
+var move_speed_cap: float = INF
 var waiting: bool = false
 var wait_node: String = ""
 var wait_edge: String = ""
@@ -38,9 +45,13 @@ var armor_type: String
 var passive: String
 var projectile_speed: float
 var aggro_range: float
+var body_width: float = 14.0
+var body_height: float = 20.0
 
 var attack_cd: float = 0.0
 var target_id: int = -1
+var last_attacker_id: int = -1
+var last_hit_time: float = -999.0
 var state: String = "advance"
 var alive: bool = true
 var slot: int = 0
@@ -86,6 +97,8 @@ func _init(p_id: int, p_team: int, p_def_id: String, p_def: Dictionary, p_pos: V
 	passive = String(def.get("passive", ""))
 	projectile_speed = float(def.get("projectile_speed", 0.0))
 	aggro_range = maxf(110.0, attack_range + 30.0)
+	body_width = float(def.get("body_width", 14.0))
+	body_height = float(def.get("body_height", 20.0))
 	heal_amount = float(def.get("heal_amount", 0.0))
 	heal_interval = float(def.get("heal_interval", 0.0))
 	heal_range = float(def.get("heal_range", 0.0))

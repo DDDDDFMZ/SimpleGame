@@ -1,9 +1,0 @@
-id,name_key,display_name,display_name_cn,guild,relation_tier,role,recruitable,cost,pop,hp,damage,attack_interval,range,speed,attack_type,armor_type,passive,projectile_speed,cooldown,heal_amount,heal_interval,heal_range,station_rank,sort_order,notes
-swordsman,unit.swordsman,Swordsman,剑士,iron,0,vanguard,True,30,1,180,18,1.0,24,55,melee,heavy,shield_wall,0,2.0,0,0,0,0,0,
-spearman,unit.spearman,Spearman,矛兵,iron,1,anti_armor,True,35,1,140,20,1.0,28,60,melee,light,armor_pierce,0,2.5,0,0,0,2,1,
-knight,unit.knight,Knight,骑士,iron,2,shock,True,70,2,240,30,1.0,26,85,melee,heavy,charge,0,5.0,0,0,0,1,2,
-archer,unit.archer,Archer,弓手,verdant,0,ranged,True,40,1,85,26,1.2,170,50,ranged,light,volley,300,3.0,0,0,0,4,3,
-rogue,unit.rogue,Rogue,盗贼,verdant,1,flanker,True,50,1,100,22,0.8,22,90,melee,light,backstab,0,3.0,0,0,0,3,4,
-catapult,unit.ballista,Ballista,弩车,verdant,2,siege,True,80,2,110,64,2.0,220,30,siege,light,siege_master,200,5.0,0,0,0,5,5,
-mage,unit.mage,Mage,法师,arcane,0,aoe,True,60,2,95,36,1.5,150,45,ranged,light,splash,250,4.0,0,0,0,6,6,
-cleric,unit.cleric,Cleric,牧师,arcane,1,support,True,55,2,90,8,1.5,150,45,ranged,light,heal,250,4.0,24,2.0,160,7,7,

@@ -202,27 +202,84 @@ func _draw_panel() -> void:
 	if not validation_errors.is_empty():
 		draw_string(font, Vector2(x, y + 12.0), "错误：%s" % String(validation_errors[0]), HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#E06666"))
 	y += 28.0
-	draw_string(font, Vector2(x, y), "参考波次（只读）", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#6FA8DC"))
-	y += 14.0
+	draw_string(font, Vector2(x, y), "出生口（只读，保存时保留 id）", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC"))
+	y += 12.0
+	for spawn in map.spawns:
+		if y > VIEW_H - 46.0:
+			break
+		var team_label := "玩家" if int(spawn.get("team", -1)) == 0 else "敌方"
+		draw_string(font, Vector2(x, y), "%s → %s (%s)" % [String(spawn.get("id", "")), String(spawn.get("name_cn", spawn.get("name", ""))), team_label], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#8A8498"))
+		y += 10.0
+	y += 4.0
+	draw_string(font, Vector2(x, y), "参考波次（只读）", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 7, Color("#6FA8DC"))
+	y += 12.0
 	for entry in levels:
 		if y > VIEW_H - 14.0:
 			break
 		var title := "无尽" if bool(entry["endless"]) else "委托%d" % int(entry["contract"])
 		var waves: Array = entry["waves"]
-		draw_string(font, Vector2(x, y), "%s %s：%d波" % [title, String(entry["name"]), waves.size()], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#B8B0C8"))
+		var route_labels := _wave_route_labels(waves)
+		var route_suffix := ""
+		if not route_labels.is_empty():
+			route_suffix = " [%s]" % "/".join(route_labels)
+		draw_string(font, Vector2(x, y), "%s %s：%d波%s" % [title, String(entry["name"]), waves.size(), route_suffix], HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#B8B0C8"))
 		y += 11.0
 	if levels.is_empty():
 		draw_string(font, Vector2(x, y), "没有委托引用此地图。", HORIZONTAL_ALIGNMENT_LEFT, 174.0, 6, Color("#8A8498"))
 
 
+func _wave_route_labels(waves: Array) -> Array:
+	var seen := {}
+	for wave in waves:
+		var default_route: Variant = wave.get("route", wave.get("lane", -1))
+		_collect_route_label(default_route, seen)
+		for spawn in wave.get("spawns", []):
+			_collect_route_label(spawn.get("route", spawn.get("lane", default_route)), seen)
+	return seen.keys()
+
+
+func _collect_route_label(route_value: Variant, seen: Dictionary) -> void:
+	var route_id := ""
+	if route_value is String and String(route_value) != "":
+		route_id = String(route_value)
+	elif route_value is float or route_value is int:
+		var enemy_routes: Array = map.spawns_for_team(1)
+		var index := int(route_value)
+		if index >= 0 and index < enemy_routes.size():
+			route_id = String(enemy_routes[index].get("id", ""))
+	if route_id == "":
+		return
+	var spawn_data := map.spawn(route_id)
+	var label := String(spawn_data.get("name_cn", spawn_data.get("name", route_id))) if not spawn_data.is_empty() else route_id
+	if not seen.has(label):
+		seen[label] = true
+
+
 func _selection_text() -> String:
 	if selected_node != "":
 		var node := map.node(selected_node)
-		return "节点 %s  %s" % [selected_node, "基地" if String(node.get("type", "")) == "base" else "交汇"]
+		var node_label := "节点 %s  %s" % [selected_node, "基地" if String(node.get("type", "")) == "base" else "交汇"]
+		var spawn_ids: Array = []
+		for spawn in map.spawns:
+			if String(spawn.get("base", "")) == selected_node:
+				spawn_ids.append(String(spawn.get("id", "")))
+		if not spawn_ids.is_empty():
+			node_label += "  出生口 " + "/".join(spawn_ids)
+		return node_label
 	if selected_edge != "":
 		var edge := map.edge(selected_edge)
-		var capacity := map.edge_capacity(selected_edge, 12.0, 12)
-		return "边 %s  宽%d 容量%d" % [selected_edge, int(edge.get("width", 80.0)), capacity]
+		var slot_width := 14.0
+		var padding := 1.0
+		if GameState.game_data != null:
+			slot_width = float(GameState.game_data.get_balance("road_slot_width", 14.0))
+			padding = float(GameState.game_data.get_balance("road_slot_padding", 1.0))
+		var capacity := map.edge_slot_count(selected_edge, slot_width, padding)
+		var spawn_ids: Array = []
+		for spawn in map.spawns:
+			if String(spawn.get("entry", "")) == selected_edge:
+				spawn_ids.append(String(spawn.get("id", "")))
+		var spawn_suffix := "" if spawn_ids.is_empty() else "  出生口 " + "/".join(spawn_ids)
+		return "边 %s  宽%d  槽位%d%s" % [selected_edge, int(edge.get("width", 80.0)), capacity, spawn_suffix]
 	return "点击节点/边选择；拖动节点移动。"
 
 
@@ -443,8 +500,9 @@ func _delete_selected() -> void:
 	queue_redraw()
 
 
-func _regenerate_spawns() -> void:
-	map.spawns.clear()
+func _ensure_base_spawns() -> void:
+	# Append-only: preserve curated spawn ids/names/order. Never rebuild or
+	# rename existing spawns just because an edge was added.
 	for team in [0, 1]:
 		var base_node: Dictionary = map.base_node_by_team.get(team, {})
 		if base_node.is_empty():
@@ -454,7 +512,18 @@ func _regenerate_spawns() -> void:
 			if String(edge.get("from", "")) != base_id and String(edge.get("to", "")) != base_id:
 				continue
 			var edge_id := String(edge.get("id", ""))
+			var exists := false
+			for spawn in map.spawns:
+				if int(spawn.get("team", -1)) == team and String(spawn.get("entry", "")) == edge_id:
+					exists = true
+					break
+			if exists:
+				continue
 			var spawn_id := "%s_%s" % ["p" if team == 0 else "e", edge_id]
+			var suffix := 1
+			while map.spawn_by_id.has(spawn_id):
+				spawn_id = "%s_%s_%d" % ["p" if team == 0 else "e", edge_id, suffix]
+				suffix += 1
 			var name := String(edge.get("name_cn", edge.get("name", edge_id)))
 			map._add_spawn(spawn_id, team, base_id, edge_id, name)
 	map._rebuild_indexes()
@@ -463,9 +532,9 @@ func _regenerate_spawns() -> void:
 func _validate_map() -> void:
 	if map == null:
 		return
-	_regenerate_spawns()
+	# Validate a deep copy; validation must not mutate spawn ids/order.
 	var check := MapData.new()
-	check.apply_dict(map.to_dict())
+	check.apply_dict(map.to_dict().duplicate(true))
 	validation_errors = check.errors.duplicate()
 	if validation_errors.is_empty():
 		status = "校验通过"
@@ -479,9 +548,9 @@ func _validate_map() -> void:
 func _save_map() -> void:
 	if map == null:
 		return
-	_regenerate_spawns()
+	_ensure_base_spawns()
 	var check := MapData.new()
-	check.apply_dict(map.to_dict())
+	check.apply_dict(map.to_dict().duplicate(true))
 	validation_errors = check.errors.duplicate()
 	if not validation_errors.is_empty():
 		status = "未保存：请先修复 %d 个校验错误" % validation_errors.size()

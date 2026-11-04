@@ -8,6 +8,9 @@ const CARD_H := 148.0
 const CARD_GAP := 12.0
 const ENDLESS_RECT := Rect2(30.0, 242.0, 580.0, 66.0)
 const SAVE_RECT := Rect2(56.0, 68.0, 528.0, 242.0)
+const SETTINGS_BUTTON := Rect2(548.0, 12.0, 72.0, 24.0)
+
+@onready var settings_panel: SettingsPanel = $SettingsPanel
 
 var font: Font
 var levels: Array = []
@@ -31,6 +34,7 @@ func _ready() -> void:
 		message = "主存档损坏，已从最近备份恢复"
 	elif GameState.load_status == "corrupt":
 		message = "主存档损坏且无可用备份，已使用默认进度"
+	settings_panel.closed.connect(queue_redraw)
 	queue_redraw()
 	if _has_map_editor_arg() and not GameState.map_editor_auto_opened:
 		GameState.map_editor_auto_opened = true
@@ -55,13 +59,16 @@ func _draw() -> void:
 	draw_string(font, Vector2(30.0, 30.0), "灰港委托", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color("#E8D5A9"))
 	draw_string(font, Vector2(150.0, 30.0), "灰鸦小队 · 冒险者协会委托板", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color("#8A8498"))
 	draw_string(font, Vector2(30.0, 50.0), "选择一份委托，带上你的冒险者守住灰港。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color("#B8B0C8"))
+	draw_rect(SETTINGS_BUTTON, Color("#252232"))
+	draw_rect(SETTINGS_BUTTON, Color("#4A4658"), false, 1.0)
+	_center_text_in("设置 [O]", SETTINGS_BUTTON, 8, Color("#E8D5A9"))
 
 	for i in range(levels.size()):
 		_draw_contract(i)
 
 	_draw_endless()
 	_draw_favor()
-	var footer := "1-3 选择委托 · E 无尽 · S 存档/备份 · Esc 退出"
+	var footer := "1-3 选择委托 · E 无尽 · S 存档/备份 · O 设置 · Esc 退出"
 	if OS.is_debug_build():
 		footer += " · F3 地图编辑器（调试）"
 	draw_string(font, Vector2(30.0, 344.0), footer, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color("#6B6B6B"))
@@ -242,7 +249,7 @@ func _apply_save_confirm() -> void:
 		else:
 			message = "恢复失败：备份文件无效"
 	elif action == "new":
-		if GameState.new_game(true):
+		if GameState.new_game():
 			message = "已开始新存档（旧进度已备份）"
 		else:
 			message = "新存档失败"
@@ -263,10 +270,22 @@ func _open_save_panel() -> void:
 	queue_redraw()
 
 
+func _open_settings() -> void:
+	save_panel_open = false
+	save_confirm = ""
+	settings_panel.open(0)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton) or not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 		return
+	if settings_panel.visible:
+		return
 	var pos: Vector2 = event.position
+	if SETTINGS_BUTTON.has_point(pos):
+		_open_settings()
+		accept_event()
+		return
 	if save_panel_open:
 		_handle_save_click(pos)
 		accept_event()
@@ -289,6 +308,8 @@ func _center_text_in(text: String, rect: Rect2, size: int, color: Color) -> void
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
+	if settings_panel.visible:
+		return
 	if save_panel_open:
 		if event.keycode == KEY_ESCAPE:
 			save_panel_open = false
@@ -304,6 +325,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_start_endless()
 		KEY_S:
 			_open_save_panel()
+		KEY_O:
+			_open_settings()
 		KEY_F3:
 			_open_map_editor()
 		KEY_ESCAPE:

@@ -3,6 +3,7 @@ extends RefCounted
 
 var id: int
 var team: int
+var source_id: int = -1
 var pos: Vector2 = Vector2.ZERO
 var target_id: int = -1
 var speed: float = 0.0

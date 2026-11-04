@@ -32,7 +32,7 @@ func _test_map_data() -> void:
 	_check(is_equal_approx(map.base_x(0), 140.0), "player base x comes from graph")
 	_check(is_equal_approx(map.base_x(1), 1460.0), "enemy base x comes from graph")
 	_check(is_equal_approx(map.edge_width("p_jn"), 80.0), "edge width loaded")
-	_check(map.edge_capacity("p_jn", 12.0, 12) == 6, "width derives capacity")
+	_check(map.edge_slot_count("p_jn", 12.0, 1.0) == 6, "width derives collision slots")
 	_check(map.node_by_id.has("j_north"), "junction node loaded")
 	_check(map.edge_by_id.has("jn_js"), "cross edge loaded")
 	var roundtrip := MapData.new()
@@ -114,8 +114,15 @@ func _test_map_editor_scene() -> void:
 	_check(editor.map != null, "map editor loads a graph map")
 	_check(editor.map_paths.size() >= 2, "map editor lists map files")
 	_check(not editor.levels.is_empty(), "map editor finds levels referencing the map")
+	var spawn_ids_before: Array = []
+	for spawn in editor.map.spawns:
+		spawn_ids_before.append(String(spawn.get("id", "")))
 	editor._validate_map()
 	_check(editor.validation_errors.is_empty(), "map editor validates current map")
+	var spawn_ids_after: Array = []
+	for spawn in editor.map.spawns:
+		spawn_ids_after.append(String(spawn.get("id", "")))
+	_check(spawn_ids_before == spawn_ids_after, "map validation does not rewrite spawn ids")
 	editor.selected_edge = "p_jn"
 	var old_width := float(editor.map.edge("p_jn").get("width", 80.0))
 	editor._adjust_width(4.0)
@@ -126,6 +133,10 @@ func _test_map_editor_scene() -> void:
 	_check(FileAccess.file_exists(test_path), "map editor saves graph JSON")
 	var saved := MapData.load_file(test_path)
 	_check(saved.errors.is_empty(), "saved graph map reloads and validates")
+	var saved_ids: Array = []
+	for spawn in saved.spawns:
+		saved_ids.append(String(spawn.get("id", "")))
+	_check(saved_ids == spawn_ids_before, "map save preserves curated spawn ids/order")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
 	editor.queue_free()
 	await process_frame

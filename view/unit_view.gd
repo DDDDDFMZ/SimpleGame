@@ -30,20 +30,22 @@ func _draw() -> void:
 	var team := int(data.get("team", 0))
 	var color := Color("#3B6EA5") if team == 0 else Color("#A53B3B")
 	var bar_color := Color("#6FA8DC") if team == 0 else Color("#E06666")
+	var body_w := maxf(6.0, float(data.get("body_width", 14.0)))
+	var body_h := maxf(6.0, float(data.get("body_height", 20.0)))
 
-	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), color)
-	draw_rect(Rect2(-7.0, -10.0, 14.0, 20.0), Color(0.0, 0.0, 0.0, 0.45), false, 1.0)
+	draw_rect(Rect2(-body_w * 0.5, -body_h * 0.5, body_w, body_h), color)
+	draw_rect(Rect2(-body_w * 0.5, -body_h * 0.5, body_w, body_h), Color(0.0, 0.0, 0.0, 0.45), false, 1.0)
 	if bool(data.get("is_elite", false)):
-		draw_rect(Rect2(-8.0, -11.0, 16.0, 22.0), Color("#D9A441"), false, 1.5)
+		draw_rect(Rect2(-body_w * 0.5 - 1.0, -body_h * 0.5 - 1.0, body_w + 2.0, body_h + 2.0), Color("#D9A441"), false, 1.5)
 	if bool(data.get("is_target", false)):
-		draw_rect(Rect2(-9.0, -12.0, 18.0, 24.0), Color("#F0C75E"), false, 2.0)
+		draw_rect(Rect2(-body_w * 0.5 - 2.0, -body_h * 0.5 - 2.0, body_w + 4.0, body_h + 4.0), Color("#F0C75E"), false, 2.0)
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(0.0, -19.0), Vector2(4.0, -15.0), Vector2(0.0, -11.0), Vector2(-4.0, -15.0),
+			Vector2(0.0, -body_h * 0.5 - 9.0), Vector2(4.0, -body_h * 0.5 - 5.0), Vector2(0.0, -body_h * 0.5 - 1.0), Vector2(-4.0, -body_h * 0.5 - 5.0),
 		]), Color("#F0C75E"))
 	if selected:
-		draw_arc(Vector2(0.0, 0.0), 12.0, 0.0, TAU, 16, Color("#D9A441"), 1.5)
+		draw_arc(Vector2(0.0, 0.0), maxf(body_w, body_h) * 0.5 + 3.0, 0.0, TAU, 16, Color("#D9A441"), 1.5)
 	if bool(data.get("waiting", false)):
-		draw_arc(Vector2(0.0, 0.0), 9.0, 0.0, TAU, 12, Color("#8A8498"), 1.0)
+		draw_arc(Vector2(0.0, 0.0), maxf(body_w, body_h) * 0.5 + 2.0, 0.0, TAU, 12, Color("#8A8498"), 1.0)
 
 	var attack_type := String(data.get("attack_type", "melee"))
 	var glyph_color := Color(1.0, 1.0, 1.0, 0.8)
@@ -57,6 +59,6 @@ func _draw() -> void:
 
 	var max_hp := maxf(1.0, float(data.get("max_hp", 1.0)))
 	var ratio := clampf(float(data.get("hp", 0.0)) / max_hp, 0.0, 1.0)
-	draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.7))
+	draw_rect(Rect2(-body_w * 0.5, -body_h * 0.5 - 4.0, body_w, 3.0), Color(0.0, 0.0, 0.0, 0.7))
 	if ratio > 0.0:
-		draw_rect(Rect2(-8.0, -14.0, 16.0 * ratio, 3.0), bar_color)
+		draw_rect(Rect2(-body_w * 0.5, -body_h * 0.5 - 4.0, body_w * ratio, 3.0), bar_color)

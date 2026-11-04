@@ -9,7 +9,7 @@
   "mode": "defense",
   "base_hp": 20,
   "base_damage": 1,
-  "starting_gold": 240,
+  "starting_gold": 210,
   "stipend": 6.0,
   "star_thresholds": [
     12,
@@ -25,170 +25,184 @@
   "waves": [
     {
       "time": 20,
-      "lane": 0,
       "message": "Wave 1: marsh pickets",
       "message_cn": "第 1 波：雾沼哨兵",
       "spawns": [
         {
           "unit": "spearman",
-          "count": 3
+          "count": 3,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 2,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "spearman",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 70,
-      "lane": 0,
       "message": "Wave 2: mounted raiders",
       "message_cn": "第 2 波：骑手突袭",
       "spawns": [
         {
           "unit": "knight",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 2,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "archer",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_mid"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 120,
-      "lane": 0,
       "message": "Wave 3: hired magic",
       "message_cn": "第 3 波：雇佣法师",
       "spawns": [
         {
           "unit": "mage",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "swordsman",
           "count": 3,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "mage",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_mid"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 170,
-      "lane": 0,
       "message": "Wave 4: the huntmaster",
       "message_cn": "第 4 波：猎场主",
       "spawns": [
         {
           "unit": "rogue",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 2,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "rogue",
           "count": 1,
           "elite": true,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_mid"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 220,
-      "lane": 0,
       "message": "Wave 5: steel and fire",
       "message_cn": "第 5 波：钢铁与火焰",
       "spawns": [
         {
           "unit": "knight",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "mage",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 2,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "knight",
           "count": 1,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_mid"
         }
-      ]
+      ],
+      "route": "enemy_north"
     },
     {
       "time": 270,
-      "lane": 0,
       "message": "Wave 6: Red Banner's answer",
       "message_cn": "第 6 波：赤旗的回答",
       "spawns": [
         {
           "unit": "swordsman",
-          "count": 3
+          "count": 3,
+          "route": "enemy_north"
         },
         {
           "unit": "mage",
-          "count": 1
+          "count": 1,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 2,
-          "lane": 1
+          "route": "enemy_mid"
         },
         {
           "unit": "mage",
           "count": 1,
           "elite": true,
-          "target": true
+          "target": true,
+          "route": "enemy_north"
         },
         {
           "unit": "archer",
           "count": 1,
-          "lane": 1
+          "route": "enemy_mid"
         }
-      ]
+      ],
+      "route": "enemy_north"
     }
   ]
 }
