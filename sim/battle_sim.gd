@@ -51,6 +51,11 @@ var squad_slot_tolerance: float = 3.0
 var squad_regroup_distance: float = 80.0
 var assist_radius: float = 150.0
 var vision_radius: float = 180.0
+var target_range_mult: float = 1.2
+var threat_memory: float = 2.5
+var lateral_speed: float = 30.0
+var queue_timeout: float = 4.0
+var unit_clusters: Dictionary = {}
 var squads: Dictionary = {}
 var next_squad_id: int = 1
 
@@ -121,6 +126,10 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	squad_regroup_distance = float(data.get_balance("squad_regroup_distance", 80.0))
 	assist_radius = float(data.get_balance("assist_radius", 150.0))
 	vision_radius = float(data.get_balance("vision_radius", 180.0))
+	target_range_mult = float(data.get_balance("target_range_mult", 1.2))
+	threat_memory = float(data.get_balance("threat_memory", 2.5))
+	lateral_speed = float(data.get_balance("lateral_speed", 30.0))
+	queue_timeout = float(data.get_balance("queue_timeout", 4.0))
 
 	map_data = data.map_for_level(level)
 	map_graph = MapGraph.new(map_data)
@@ -352,10 +361,12 @@ func tick() -> void:
 	_apply_commands()
 	_update_waves()
 	_update_squads()
+	_build_combat_clusters()
 	for u in units:
 		if u.alive:
 			_update_unit(u, TICK_DT)
 	_process_all_queues()
+	_update_lateral_positions(TICK_DT)
 	_update_projectiles(TICK_DT)
 	_cleanup_dead()
 	_check_finished()
@@ -474,15 +485,29 @@ func _apply_rally(route_id: String, world_pos: Vector2) -> void:
 	var near := map_graph.nearest_point_on_route(route_id, target_node, world_pos)
 	if String(near.get("edge_id", "")) == "":
 		return
+	var rally_edge := String(near["edge_id"])
+	var rally_s := float(near["s"])
 	rallies[route_id] = {
-		"edge_id": String(near["edge_id"]),
-		"s": float(near["s"]),
+		"edge_id": rally_edge,
+		"s": rally_s,
 		"pos": near["pos"],
 		"custom": true,
 	}
 	for u in units:
 		if u.alive and u.team == PLAYER and u.route_id == route_id and not u.manual_order:
 			u.goal_dirty = true
+			# Units already aimed at this entry edge (including ones still at
+			# the base with a forced entry) must receive the new s before they
+			# enter, otherwise they stop at the stale default rally point.
+			if u.target_edge_id == rally_edge or u.forced_entry == rally_edge:
+				u.target_edge_id = rally_edge
+				u.target_edge_s = rally_s
+				u.target_point = map_graph.edge_point(rally_edge, rally_s)
+				u.goal_node = ""
+				if u.edge_id == rally_edge:
+					u.goal_dirty = false
+					u.path = []
+					u.path_index = 0
 
 
 func _apply_move_squad(unit_ids: Array, world_pos: Vector2) -> void:
@@ -540,12 +565,15 @@ func _apply_move_squad(unit_ids: Array, world_pos: Vector2) -> void:
 			"trail": [],
 			"trail_total": 0.0,
 			"wait_time": 0.0,
+			"move_priority": true,
+			"arrived": false,
 		}
 		for i in range(group.size()):
 			var u: SimUnit = group[i]
 			u.squad_id = squad_id
 			u.squad_rank = i
 			u.squad_state = "moving"
+			u.move_priority = true
 			u.move_speed_cap = speed_cap
 			u.target_edge_id = target_edge
 			u.target_edge_s = clampf(target_s - float(i) * station_spacing, 0.0, target_length)
@@ -561,6 +589,8 @@ func _apply_move_squad(unit_ids: Array, world_pos: Vector2) -> void:
 				u.goal_dirty = false
 			elif u.edge_id == "":
 				_assign_manual_goal(u)
+			elif not _plan_from_edge(u, target_edge, u.target_edge_s):
+				u.goal_dirty = true
 			squads[squad_id]["member_ids"].append(u.id)
 
 
@@ -587,6 +617,46 @@ func _route_cost_to_point(u: SimUnit, target_edge: String, target_s: float) -> f
 	var a := map_graph.path_length(map_graph.shortest_path(start_node, from_node)) + target_s
 	var b := map_graph.path_length(map_graph.shortest_path(start_node, to_node)) + (map_graph.edge_length(target_edge) - target_s)
 	return minf(a, b)
+
+
+func _is_squad_leader(u: SimUnit) -> bool:
+	if u.squad_id < 0:
+		return false
+	var squad: Dictionary = squads.get(u.squad_id, {})
+	return not squad.is_empty() and int(squad.get("leader_id", -1)) == u.id
+
+
+func _mark_move_arrived(u: SimUnit) -> void:
+	if u.squad_id >= 0 and not _is_squad_leader(u):
+		return
+	u.move_priority = false
+	if u.squad_id < 0:
+		return
+	var squad: Dictionary = squads.get(u.squad_id, {})
+	if squad.is_empty() or bool(squad.get("arrived", false)):
+		return
+	squad["move_priority"] = false
+	squad["arrived"] = true
+	var target_edge := String(squad.get("target_edge_id", ""))
+	var target_s := float(squad.get("target_s", -1.0))
+	for id in squad.get("member_ids", []):
+		var member := _unit_by_id(int(id))
+		if member == null or not member.alive:
+			continue
+		member.move_priority = false
+		member.target_edge_id = target_edge
+		member.target_edge_s = target_s
+		member.goal_node = ""
+		member.manual_order = true
+		member.hold_position = false
+		if member.edge_id == target_edge:
+			member.goal_dirty = false
+			member.path = []
+			member.path_index = 0
+		elif member.edge_id == "":
+			_set_goal_edge(member, target_edge, target_s)
+		else:
+			member.goal_dirty = true
 
 
 func _clear_unit_squad(u: SimUnit) -> void:
@@ -629,6 +699,8 @@ func _update_squads(p_formation: bool = true) -> void:
 			u.squad_wait = false
 			squad["member_ids"].append(u.id)
 		squad["leader_id"] = leader.id
+		for u in living:
+			u.move_priority = bool(squad.get("move_priority", false))
 		if old_leader_id != leader.id:
 			# Promotion (or first build): the new leader resumes the squad's
 			# objective and lays a fresh trail for the followers.
@@ -644,6 +716,18 @@ func _update_squads(p_formation: bool = true) -> void:
 			leader.at_base = false
 			_reset_squad_trail(squad, leader)
 			squad["wait_time"] = 0.0
+		if bool(squad.get("arrived", false)):
+			var arrived_state := "holding"
+			for u in living:
+				if u.target_id >= 0:
+					arrived_state = "fighting"
+					break
+				if u.edge_id != u.target_edge_id or absf(u.edge_s - u.target_edge_s) > 1.0:
+					arrived_state = "moving"
+			squad["state"] = arrived_state
+			for u in living:
+				u.squad_state = arrived_state
+			continue
 		if not p_formation:
 			continue
 		_sample_squad_trail(squad, leader)
@@ -784,6 +868,8 @@ func _apply_squad_target(u: SimUnit, target: Dictionary) -> void:
 	var edge_id := String(target.get("edge_id", ""))
 	if edge_id == "":
 		return
+	if u.waiting and u.wait_edge != edge_id:
+		_remove_from_queue(u)
 	var target_s := float(target.get("s", 0.0))
 	if u.edge_id == edge_id:
 		u.goal_node = ""
@@ -802,12 +888,64 @@ func _apply_squad_target(u: SimUnit, target: Dictionary) -> void:
 			_set_goal_edge(u, edge_id, target_s)
 			u.manual_order = true
 		return
+	var changed := u.target_edge_id != edge_id
 	u.goal_node = ""
 	u.target_edge_id = edge_id
 	u.target_edge_s = target_s
-	# On an edge the unit must reach a node before the path can change. The
-	# dirty flag makes it replan as soon as it exits instead of every tick.
-	u.goal_dirty = true
+	# Choose the nearer end of the current edge immediately, so a destination
+	# behind the unit reverses the column instead of walking to the far node.
+	if changed or u.path.is_empty():
+		if not _plan_from_edge(u, edge_id, target_s):
+			u.goal_dirty = true
+	else:
+		u.goal_dirty = false
+
+
+func _plan_from_edge(u: SimUnit, target_edge: String, target_s: float) -> bool:
+	if u.edge_id == "" or u.edge_id == target_edge:
+		return false
+	if not map_data.edge_by_id.has(target_edge) or not map_data.edge_by_id.has(u.edge_id):
+		return false
+	var target: Dictionary = map_data.edge(target_edge)
+	var current: Dictionary = map_data.edge(u.edge_id)
+	var target_len := map_graph.edge_length(target_edge)
+	var current_len := map_graph.edge_length(u.edge_id)
+	var current_from := String(current.get("from", ""))
+	var current_to := String(current.get("to", ""))
+	var target_from := String(target.get("from", ""))
+	var target_to := String(target.get("to", ""))
+	var best_cost := INF
+	var best_exit := ""
+	var best_path: Array = []
+	for exit_node in [current_from, current_to]:
+		var along := u.edge_s if String(exit_node) == current_from else current_len - u.edge_s
+		for goal_node in [target_from, target_to]:
+			var suffix := target_s if String(goal_node) == target_from else target_len - target_s
+			var path: Array = []
+			if String(exit_node) != String(goal_node):
+				path = map_graph.shortest_path(String(exit_node), String(goal_node), [u.edge_id])
+				if path.is_empty():
+					continue
+			var cost := along + map_graph.path_length(path) + suffix
+			if cost < best_cost:
+				best_cost = cost
+				best_exit = String(exit_node)
+				best_path = path
+	if best_exit == "":
+		return false
+	u.edge_dir = 1 if best_exit == current_to else -1
+	u.path = [u.edge_id]
+	u.path.append_array(best_path)
+	if u.path.is_empty() or String(u.path[u.path.size() - 1]) != target_edge:
+		u.path.append(target_edge)
+	u.path_index = 0
+	u.goal_node = ""
+	u.target_edge_id = target_edge
+	u.target_edge_s = target_s
+	u.target_point = map_graph.edge_point(target_edge, target_s)
+	u.goal_dirty = false
+	u.manual_order = true
+	return true
 
 
 func _assign_manual_goal(u: SimUnit) -> void:
@@ -836,6 +974,7 @@ func _apply_hold_squad(unit_ids: Array) -> void:
 		_clear_unit_squad(u)
 		u.manual_order = true
 		u.hold_position = true
+		u.move_priority = false
 		u.at_base = false
 		u.path = []
 		u.path_index = 0
@@ -850,6 +989,7 @@ func _apply_return_squad(unit_ids: Array) -> void:
 		_clear_unit_squad(u)
 		u.manual_order = false
 		u.hold_position = false
+		u.move_priority = false
 		u.at_base = false
 		u.goal_dirty = true
 		u.path = []
@@ -911,7 +1051,7 @@ func _spawn_unit(team: int, route_value: Variant, def_id: String, elite: bool = 
 		if String(rally.get("edge_id", "")) == unit.forced_entry:
 			unit.goal_dirty = false
 			unit.target_edge_id = unit.forced_entry
-			unit.target_edge_s = clampf(float(rally.get("s", 0.0)) - float(unit.station_rank) * station_spacing, 0.0, map_graph.edge_length(unit.forced_entry))
+			unit.target_edge_s = clampf(float(rally.get("s", 0.0)), 0.0, map_graph.edge_length(unit.forced_entry))
 	next_id += 1
 	units.append(unit)
 
@@ -998,15 +1138,19 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 	_update_heal(u, dt)
 
 	var target := _find_target(u)
+	var keep_target_id := -1
 	if target != null and _distance(u, target) <= u.attack_range:
 		u.state = "attack"
 		u.target_id = target.id
-		u.stationary_time += dt
+		keep_target_id = target.id
 		if u.attack_cd <= 0.0:
 			_perform_attack(u, target)
 			u.attack_cd = _attack_interval(u)
-		_check_base_arrival(u)
-		return
+		if not u.move_priority:
+			u.stationary_time += dt
+			_check_base_arrival(u)
+			return
+		# Move-priority units fire on the move instead of stopping.
 
 	if u.hold_position:
 		u.state = "hold"
@@ -1016,20 +1160,55 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 		return
 
 	if u.waiting:
-		u.state = "queue"
-		u.target_id = target.id if target != null else -1
-		u.stationary_time += dt
-		_check_base_arrival(u)
-		return
+		# Auto-defenders can have their rally changed while queued. Recompute
+		# their route goal and leave the old queue if the target edge changed.
+		if u.goal_dirty and not u.manual_order and u.forced_entry == "":
+			var old_wait_edge := u.wait_edge
+			_assign_route_goal(u)
+			if u.target_edge_id != old_wait_edge or old_wait_edge == "":
+				_remove_from_queue(u)
+			else:
+				u.goal_dirty = false
+	if u.waiting:
+		var wait_queue: Array = node_queues.get(u.wait_node, [])
+		if not wait_queue.has(u.id):
+			# A stale flag without a matching node entry would otherwise leave
+			# the unit visually stuck in "queue" forever.
+			u.waiting = false
+			u.wait_node = ""
+			u.wait_edge = ""
+			u.goal_dirty = true
+		else:
+			u.wait_time += dt
+			if u.wait_time > queue_timeout and u.wait_edge != "" and u.forced_entry == "":
+				var wait_node := u.wait_node
+				var blocked_edge := u.wait_edge
+				_remove_from_queue(u)
+				if not _replan_around_friend(u, blocked_edge):
+					_enqueue(u, wait_node, blocked_edge)
+					u.state = "queue"
+					u.target_id = target.id if target != null else -1
+					u.stationary_time += dt
+					_check_base_arrival(u)
+					return
+			elif u.target_edge_id != "" and u.wait_edge != u.target_edge_id:
+				_remove_from_queue(u)
+				u.goal_dirty = true
+			else:
+				u.state = "queue"
+				u.target_id = target.id if target != null else -1
+				u.stationary_time += dt
+				_check_base_arrival(u)
+				return
 
 	# Once all scheduled waves are out, idle defenders seek remaining enemies
 	# instead of holding at a rally forever and stalling the finish condition.
-	if target == null and u.team == PLAYER and defense_mode and next_wave_index >= wave_count and not u.manual_order and not u.hold_position:
+	if target == null and u.team == PLAYER and defense_mode and next_wave_index >= wave_count and not u.manual_order and not u.hold_position and not u.move_priority:
 		var seek := _nearest_enemy_elsewhere(u)
 		if seek != null:
 			_seek_enemy(u, seek)
 
-	if target != null and target.edge_id == u.edge_id and u.edge_id != "":
+	if target != null and target.edge_id == u.edge_id and u.edge_id != "" and not u.move_priority:
 		u.state = "engage"
 		u.target_id = target.id
 		u.goal_dirty = false
@@ -1040,11 +1219,11 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 
 	if u.squad_wait:
 		u.state = "wait"
-		u.target_id = -1
+		u.target_id = keep_target_id
 		u.stationary_time += dt
 		_check_base_arrival(u)
 		return
-	u.target_id = -1
+	u.target_id = keep_target_id
 	if u.edge_id != "":
 		_move_on_current_edge(u, dt)
 	else:
@@ -1097,7 +1276,7 @@ func _assign_route_goal(u: SimUnit) -> void:
 	if u.team == PLAYER and rallies.has(u.route_id):
 		var rally: Dictionary = rallies[u.route_id]
 		var rally_s := float(rally.get("s", 0.0))
-		var formation_s := clampf(rally_s - float(u.station_rank) * station_spacing, 0.0, map_graph.edge_length(String(rally.get("edge_id", ""))))
+		var formation_s := clampf(rally_s, 0.0, map_graph.edge_length(String(rally.get("edge_id", ""))))
 		_set_goal_edge(u, String(rally.get("edge_id", "")), formation_s)
 		return
 	u.goal_node = base_nodes[ENEMY] if u.team == PLAYER else base_nodes[PLAYER]
@@ -1157,14 +1336,16 @@ func _try_enter_edge(u: SimUnit, edge_id: String, entry_node: String) -> bool:
 	var entry_s := 0.0 if String(map_data.edge(edge_id).get("from", "")) == entry_node else edge_length
 	if edge_id == u.target_edge_id and absf(u.target_edge_s - entry_s) <= 0.5:
 		# Target point is exactly at the node; do not enter-and-exit in a loop.
+		_remove_from_queue(u)
 		u.node_id = entry_node
 		u.edge_id = ""
 		u.path_index = u.path.size()
 		u.target_edge_id = ""
 		u.target_edge_s = -1.0
 		u.goal_dirty = false
-		u.hold_position = true
+		u.hold_position = u.squad_id < 0
 		u.state = "hold"
+		_mark_move_arrived(u)
 		return true
 	var slot_index := _free_slot_for(edge_id, u)
 	if slot_index < 0:
@@ -1179,7 +1360,8 @@ func _try_enter_edge(u: SimUnit, edge_id: String, entry_node: String) -> bool:
 	var slots: Array = edge_slots.get(edge_id, [])
 	slots[slot_index] = u.id
 	edge_slots[edge_id] = slots
-	u.lateral = (float(slot_index) - float(slots.size() - 1) * 0.5) * edge_slot_width
+	u.lateral = 0.0
+	u.lateral_target = 0.0
 	u.edge_s = 0.0 if String(map_data.edge(edge_id).get("from", "")) == entry_node else map_graph.edge_length(edge_id)
 	u.edge_dir = 1 if String(map_data.edge(edge_id).get("from", "")) == entry_node else -1
 	u.node_id = ""
@@ -1219,9 +1401,9 @@ func _edge_blocked_by_friend(edge_id: String, team: int) -> bool:
 
 
 func _replan_around_friend(u: SimUnit, blocked_edge: String) -> bool:
-	if u.waiting or u.node_id == "":
+	if u.node_id == "":
 		return false
-	if u.manual_order and u.target_edge_id != "" and u.target_edge_id != blocked_edge:
+	if u.target_edge_id != "" and u.target_edge_id != blocked_edge:
 		var target := map_data.edge(u.target_edge_id)
 		var from_node := String(target.get("from", ""))
 		var to_node := String(target.get("to", ""))
@@ -1290,9 +1472,11 @@ func _enqueue(u: SimUnit, node: String, edge_id: String) -> void:
 	u.wait_time = 0.0
 	var queue: Array = node_queues.get(node, [])
 	queue.append(u.id)
+	queue.sort_custom(_queue_less)
 	node_queues[node] = queue
-	u.pos = _queue_position(node, queue.size() - 1)
+	_refresh_queue_positions(node)
 	u.lateral = 0.0
+	u.lateral_target = 0.0
 	u.edge_slot = -1
 	u.edge_id = ""
 	u.node_id = node
@@ -1312,18 +1496,44 @@ func _remove_from_queue(u: SimUnit) -> void:
 	u.wait_edge = ""
 
 
-func _queue_position(node: String, index: int) -> Vector2:
+func _queue_less(a: int, b: int) -> bool:
+	var ua := _unit_by_id(a)
+	var ub := _unit_by_id(b)
+	if ua == null or ub == null:
+		return a < b
+	if ua.squad_id >= 0 and ua.squad_id == ub.squad_id:
+		if ua.squad_rank != ub.squad_rank:
+			return ua.squad_rank < ub.squad_rank
+	if ua.station_rank == ub.station_rank:
+		return ua.id < ub.id
+	return ua.station_rank < ub.station_rank
+
+
+func _queue_position(node: String, index: int, edge_id: String = "") -> Vector2:
+	var back := Vector2.DOWN
+	if edge_id != "" and map_data.edge_by_id.has(edge_id):
+		var edge: Dictionary = map_data.edge(edge_id)
+		var heading := map_graph.edge_heading(edge_id, 0.0)
+		var entry_dir := heading if String(edge.get("from", "")) == node else -heading
+		if entry_dir.length_squared() > 0.001:
+			back = -entry_dir.normalized()
+	var side := Vector2(-back.y, back.x)
 	var col := index % 3
 	var row := int(index / 3)
-	return map_data.node_pos(node) + Vector2((col - 1) * 14.0, row * 16.0 + 8.0)
+	return map_data.node_pos(node) + back * (2.0 + float(row) * 18.0) + side * (float(col - 1) * 14.0)
 
 
 func _refresh_queue_positions(node: String) -> void:
 	var queue: Array = node_queues.get(node, [])
+	var primary_edge := ""
+	if not queue.is_empty():
+		var first := _unit_by_id(int(queue[0]))
+		if first != null:
+			primary_edge = first.wait_edge
 	for i in range(queue.size()):
 		var u := _unit_by_id(int(queue[i]))
 		if u != null and u.waiting:
-			u.pos = _queue_position(node, i)
+			u.pos = _queue_position(node, i, primary_edge)
 
 
 func _process_queue(node: String) -> void:
@@ -1331,18 +1541,7 @@ func _process_queue(node: String) -> void:
 	if queue.is_empty():
 		return
 	var sorted := queue.duplicate()
-	sorted.sort_custom(func(a, b) -> bool:
-		var ua := _unit_by_id(int(a))
-		var ub := _unit_by_id(int(b))
-		if ua == null or ub == null:
-			return int(a) < int(b)
-		if ua.squad_id >= 0 and ua.squad_id == ub.squad_id:
-			if ua.squad_rank != ub.squad_rank:
-				return ua.squad_rank < ub.squad_rank
-		if ua.station_rank == ub.station_rank:
-			return ua.id < ub.id
-		return ua.station_rank < ub.station_rank
-	)
+	sorted.sort_custom(_queue_less)
 	var remaining: Array = []
 	for id in sorted:
 		var u := _unit_by_id(int(id))
@@ -1351,9 +1550,19 @@ func _process_queue(node: String) -> void:
 		var edge_id := u.wait_edge
 		if _free_slot_for(edge_id, u) >= 0:
 			if _try_enter_edge(u, edge_id, node):
+				if u.waiting:
+					_remove_from_queue(u)
 				continue
+		elif _edge_blocked_by_friend(edge_id, u.team):
+			# A wall of friends is not a capacity problem; try an alternate
+			# edge instead of leaving the unit in the node queue forever.
+			_remove_from_queue(u)
+			if _replan_around_friend(u, edge_id):
+				continue
+			_enqueue(u, node, edge_id)
 		remaining.append(id)
 	node_queues[node] = remaining
+	node_queues[node].sort_custom(_queue_less)
 	_refresh_queue_positions(node)
 
 
@@ -1361,6 +1570,84 @@ func _process_all_queues() -> void:
 	for node_id in node_queues.keys():
 		if not node_queues[node_id].is_empty():
 			_process_queue(String(node_id))
+
+
+func _update_lateral_positions(dt: float) -> void:
+	var by_edge := {}
+	for u in units:
+		if u.alive and u.edge_id != "":
+			if not by_edge.has(u.edge_id):
+				by_edge[u.edge_id] = []
+			(by_edge[u.edge_id] as Array).append(u)
+	for edge_id in by_edge:
+		var list: Array = by_edge[edge_id]
+		list.sort_custom(func(a: SimUnit, b: SimUnit) -> bool:
+			if absf(a.edge_s - b.edge_s) < 0.01:
+				return a.id < b.id
+			return a.edge_s < b.edge_s
+		)
+		var groups: Array = []
+		for u in list:
+			var add_group := true
+			if not groups.is_empty():
+				var last_group: Array = groups[groups.size() - 1]
+				var last_unit: SimUnit = last_group[last_group.size() - 1]
+				if absf(u.edge_s - last_unit.edge_s) <= edge_slot_width:
+					add_group = false
+			if add_group:
+				groups.append([])
+			(groups[groups.size() - 1] as Array).append(u)
+		for group in groups:
+			_assign_lateral_group(String(edge_id), group)
+	for u in units:
+		if not u.alive or u.edge_id == "":
+			continue
+		u.lateral = move_toward(u.lateral, u.lateral_target, lateral_speed * dt)
+		_place_on_edge(u)
+
+
+func _assign_lateral_group(edge_id: String, group: Array) -> void:
+	if group.is_empty():
+		return
+	var edge: Dictionary = map_data.edge(edge_id)
+	var half_width := float(edge.get("width", 80.0)) * 0.5
+	var max_body := 0.0
+	for u in group:
+		max_body = maxf(max_body, u.body_width)
+	var spacing := maxf(edge_slot_width, max_body + 1.0)
+	var players: Array = []
+	var enemies: Array = []
+	for u in group:
+		if u.team == PLAYER:
+			players.append(u)
+		else:
+			enemies.append(u)
+	var max_side := maxi(players.size(), enemies.size())
+	if not players.is_empty() and not enemies.is_empty():
+		var side_center := float(max_side) * spacing * 0.5
+		_spread_lateral_team(players, -side_center, spacing, half_width, max_body)
+		_spread_lateral_team(enemies, side_center, spacing, half_width, max_body)
+	else:
+		_spread_lateral_team(group, 0.0, spacing, half_width, max_body)
+
+
+func _spread_lateral_team(team_units: Array, center: float, spacing: float, half_width: float, max_body: float) -> void:
+	if team_units.is_empty():
+		return
+	team_units.sort_custom(func(a: SimUnit, b: SimUnit) -> bool:
+		if absf(a.edge_s - b.edge_s) <= 0.5 and a.station_rank != b.station_rank:
+			return a.station_rank < b.station_rank
+		if absf(a.edge_s - b.edge_s) <= 0.5:
+			return a.id < b.id
+		return a.edge_s < b.edge_s
+	)
+	var count := team_units.size()
+	var span := float(count - 1) * spacing
+	var limit := maxf(0.0, half_width - max_body * 0.5 - 1.0)
+	for i in range(count):
+		var u: SimUnit = team_units[i]
+		var offset := center - span * 0.5 + float(i) * spacing
+		u.lateral_target = clampf(offset, -limit, limit)
 
 
 func _move_on_current_edge(u: SimUnit, dt: float) -> void:
@@ -1384,6 +1671,7 @@ func _move_on_current_edge(u: SimUnit, dt: float) -> void:
 		u.stationary_time += dt
 		if u.target_edge_id == u.edge_id:
 			u.state = "hold"
+			_mark_move_arrived(u)
 		else:
 			_exit_edge(u, false)
 		return
@@ -1418,6 +1706,7 @@ func _exit_edge(u: SimUnit, at_target: bool) -> void:
 	u.edge_id = ""
 	u.edge_s = 0.0
 	u.lateral = 0.0
+	u.lateral_target = 0.0
 	u.node_id = exit_node
 	u.set_position(map_data.node_pos(exit_node))
 	u.path_index += 1
@@ -1427,40 +1716,76 @@ func _exit_edge(u: SimUnit, at_target: bool) -> void:
 		u.state = "hold"
 
 
+func _build_combat_clusters() -> void:
+	unit_clusters.clear()
+	for u in units:
+		u.cluster_id = -1
+	var next_cluster := 1
+	for start in units:
+		if not start.alive or start.cluster_id >= 0:
+			continue
+		var members: Array = []
+		var stack: Array = [start]
+		var detect_range := 0.0
+		start.cluster_id = next_cluster
+		while not stack.is_empty():
+			var current: SimUnit = stack.pop_back()
+			members.append(current)
+			detect_range = maxf(detect_range, current.attack_range * target_range_mult)
+			for other in units:
+				if not other.alive or other.team != current.team or other.cluster_id >= 0:
+					continue
+				if current.pos.distance_to(other.pos) <= assist_radius:
+					other.cluster_id = next_cluster
+					stack.append(other)
+		for member in members:
+			(member as SimUnit).cluster_detect_range = detect_range
+		unit_clusters[next_cluster] = members
+		next_cluster += 1
+
+
+func _can_acquire(u: SimUnit, e: SimUnit, dist: float, same_edge: bool) -> bool:
+	if dist <= u.attack_range:
+		return true
+	return same_edge and dist <= u.attack_range * target_range_mult
+
+
 func _find_target(u: SimUnit) -> SimUnit:
-	var same_edge_target := false
+	var detect := u.attack_range * target_range_mult
+	# Keep the current target while it is still within the short acquisition
+	# window. This preserves focus fire without the old infinite same-edge aggro.
 	if u.target_id >= 0:
 		var current := _unit_by_id(u.target_id)
 		if current != null and current.alive and current.team != u.team:
-			var dist := _distance(u, current)
-			same_edge_target = current.edge_id == u.edge_id and u.edge_id != ""
-			if same_edge_target or (dist <= u.aggro_range * 1.3 and dist <= u.attack_range * 1.3):
+			var current_dist := _distance(u, current)
+			var current_same_edge := current.edge_id == u.edge_id and u.edge_id != ""
+			if _can_acquire(u, current, current_dist, current_same_edge):
 				return current
 
-	# Retaliation: the last attacker is valid even if the normal aggro scan
-	# would ignore it. This is also how front melee pulls nearby ranged fire.
+	# Immediate self-retaliation, still bounded by the same window.
 	var attacker := _unit_by_id(u.last_attacker_id)
 	if attacker != null and attacker.alive and attacker.team != u.team:
 		var hit_dist := _distance(u, attacker)
 		var same_hit_edge := attacker.edge_id == u.edge_id and u.edge_id != ""
-		if same_hit_edge or hit_dist <= maxf(u.attack_range * 1.2, u.aggro_range):
+		if _can_acquire(u, attacker, hit_dist, same_hit_edge):
 			return attacker
 
-	# Shared threat/vision: enemies being attacked or targeted by nearby allies
-	# become assist targets for ranged units (and melee if in range).
+	# Shared threat: the whole connected friendly cluster (transitive within
+	# assist_radius) reports recent attackers. This only grants target
+	# acquisition; a unit still has to be inside its own attack window to
+	# fire, so shared vision never turns into a cross-map chase.
 	var assisted := {}
-	for ally in units:
+	var cluster: Array = unit_clusters.get(u.cluster_id, [])
+	var share_radius := maxf(vision_radius, u.cluster_detect_range)
+	for ally in cluster:
 		if not ally.alive or ally.team != u.team or ally.id == u.id:
 			continue
-		if u.pos.distance_to(ally.pos) > assist_radius:
-			continue
-		if ally.target_id >= 0:
-			var ally_target := _unit_by_id(ally.target_id)
-			if ally_target != null and ally_target.alive and ally.pos.distance_to(ally_target.pos) <= vision_radius:
-				assisted[int(ally.target_id)] = true
-		if ally.last_attacker_id >= 0 and elapsed - ally.last_hit_time <= 2.5:
+		# Only fresh attackers are shared. Sharing ordinary targets made the
+		# whole cluster focus-fire from safety, which overwhelmed melee lines;
+		# the requested behavior is help for an ally who was actually hit.
+		if ally.last_attacker_id >= 0 and elapsed - ally.last_hit_time <= threat_memory:
 			var ally_attacker := _unit_by_id(ally.last_attacker_id)
-			if ally_attacker != null and ally_attacker.alive and ally.pos.distance_to(ally_attacker.pos) <= vision_radius:
+			if ally_attacker != null and ally_attacker.alive and ally.pos.distance_to(ally_attacker.pos) <= share_radius:
 				assisted[int(ally.last_attacker_id)] = true
 	var assisted_best: SimUnit = null
 	var assisted_dist := INF
@@ -1469,7 +1794,7 @@ func _find_target(u: SimUnit) -> SimUnit:
 			continue
 		var dist := _distance(u, e)
 		var same_edge: bool = e.edge_id == u.edge_id and u.edge_id != ""
-		if not same_edge and dist > u.attack_range:
+		if not _can_acquire(u, e, dist, same_edge):
 			continue
 		if assisted_best == null or dist < assisted_dist or (is_equal_approx(dist, assisted_dist) and e.id < assisted_best.id):
 			assisted_best = e
@@ -1484,12 +1809,7 @@ func _find_target(u: SimUnit) -> SimUnit:
 			continue
 		var dist := _distance(u, e)
 		var same_edge: bool = e.edge_id == u.edge_id and u.edge_id != ""
-		if not same_edge and dist > u.aggro_range:
-			continue
-		var valid: bool = same_edge
-		if dist <= u.attack_range:
-			valid = true
-		if not valid:
+		if not _can_acquire(u, e, dist, same_edge):
 			continue
 		if best == null or dist < best_dist or (is_equal_approx(dist, best_dist) and e.id < best.id):
 			best = e
@@ -2024,6 +2344,8 @@ func _squads_snapshot() -> Array:
 			"speed_cap": float(squad.get("speed_cap", 0.0)),
 			"spacing": float(squad.get("spacing", station_spacing)),
 			"state": String(squad.get("state", "")),
+			"move_priority": bool(squad.get("move_priority", false)),
+			"arrived": bool(squad.get("arrived", false)),
 			"target_edge_id": String(squad.get("target_edge_id", "")),
 		})
 	return result
@@ -2056,6 +2378,8 @@ func get_snapshot() -> Dictionary:
 			"squad_rank": u.squad_rank,
 			"squad_state": u.squad_state,
 			"squad_speed_cap": u.move_speed_cap if u.squad_id >= 0 else 0.0,
+			"move_priority": u.move_priority,
+			"cluster_id": u.cluster_id,
 			"is_leader": u.squad_id >= 0 and int(squads.get(u.squad_id, {}).get("leader_id", -1)) == u.id,
 			"hp": u.hp,
 			"max_hp": u.max_hp,

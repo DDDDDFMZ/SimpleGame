@@ -709,6 +709,8 @@ func _squad_text(squad: Dictionary) -> String:
 		suffix = " · 汇合"
 	elif state == "fighting":
 		suffix = " · 交战"
+	elif bool(squad.get("move_priority", false)):
+		suffix = " · 机动"
 	return "编队%s · %s · 速%d · 距%d%s" % [
 		route_name,
 		String(squad.get("leader_name", "")),

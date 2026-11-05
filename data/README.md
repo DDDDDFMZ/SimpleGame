@@ -6,7 +6,8 @@
 
 - `units.json`：对象 key = 单位 id。改 `cost/hp/damage/speed/range/attack_interval` 等；`display_name_cn` 是游戏内中文名；`body_width/body_height` 是碰撞箱/美术预留空间；`station_rank` 是默认站位顺序。
 - `guilds.json`：对象 key = 协会 id；`tiers[]` 含 `cost/cap/rank_gate`。不要写 `tiers[].units`，职业层级由 `units.json` 的 `guild + relation_tier` 推导。
-- `balance.json`：扁平键（`base_pop`、`promo_cost`、`road_slot_width`、`squad_spacing` 等）。数组写 `[1, 3, 5]`。
+- `balance.json`：扁平键（`base_pop`、`promo_cost`、`road_slot_width`、`squad_spacing`、`target_range_mult`、`queue_timeout` 等）。数组写 `[1, 3, 5]`。
+- `target_range_mult` 控制索敌窗口（射程×倍率）；`threat_memory` 控制受击支援记忆；`lateral_speed`/`queue_timeout` 控制横移与排队绕行。
 - `counters.json`：攻型 → 轻/重甲倍率。
 - JSON 不支持注释和尾逗号；小数用 `.`；UTF-8。
 
