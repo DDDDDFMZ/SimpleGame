@@ -27,7 +27,7 @@ const REQUIRED_BALANCE := [
 	"road_slot_width", "road_slot_padding", "squad_spacing",
 	"squad_slot_tolerance", "squad_regroup_distance",
 	"assist_radius", "vision_radius", "target_range_mult", "threat_memory",
-	"lateral_speed", "queue_timeout",
+	"lateral_speed",
 ]
 const NUMERIC_BALANCE := [
 	"base_pop", "pop_per_rank", "wave_gold_base", "wave_gold_per_wave",
@@ -42,7 +42,7 @@ const NUMERIC_BALANCE := [
 	"volley_interval_mult", "charge_damage_mult", "splash_ratio",
 	"splash_radius", "threshold_2", "threshold_3",
 	"road_capacity_px_per_unit", "road_capacity_max", "station_spacing",
-	"target_range_mult", "threat_memory", "lateral_speed", "queue_timeout",
+	"target_range_mult", "threat_memory", "lateral_speed",
 ]
 const ARRAY_BALANCE := ["promo_kills", "promo_cost"]
 const KNOWN_BALANCE := [
@@ -59,7 +59,7 @@ const KNOWN_BALANCE := [
 	"volley_interval_mult", "charge_damage_mult", "splash_ratio",
 	"splash_radius", "threshold_2", "threshold_3",
 	"road_capacity_px_per_unit", "road_capacity_max", "station_spacing",
-	"target_range_mult", "threat_memory", "lateral_speed", "queue_timeout",
+	"target_range_mult", "threat_memory", "lateral_speed",
 ]
 
 var units_path: String = UNITS_PATH

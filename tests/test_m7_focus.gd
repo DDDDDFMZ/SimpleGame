@@ -10,8 +10,6 @@ func _initialize() -> void:
 	_test_reverse_to_other_edge()
 	_test_rally_retarget()
 	_test_squad_arrival_line()
-	_test_queue_recovery()
-	_test_queue_timeout_detour()
 	_test_lateral_formation()
 	if failures == 0:
 		print("M7 FOCUS TESTS PASS")
@@ -159,66 +157,6 @@ func _test_squad_arrival_line() -> void:
 	_check(laterals.size() == 3, "arrived squad spreads into a line across the road")
 
 
-func _test_queue_recovery() -> void:
-	var sim := BattleSim.new(14, 20, 1, {}, false)
-	for i in range(5):
-		sim._spawn_unit(BattleSim.PLAYER, 0, "swordsman")
-	for i in range(10):
-		sim.tick()
-	sim._spawn_unit(BattleSim.ENEMY, 0, "swordsman")
-	var enemy: SimUnit = sim.units[sim.units.size() - 1]
-	enemy.node_id = "j_north"
-	enemy.edge_id = ""
-	enemy.forced_entry = ""
-	enemy.path = []
-	sim._enqueue(enemy, "j_north", "p_jn")
-	enemy.target_edge_id = "p_jn"
-	enemy.target_edge_s = sim.map_graph.edge_length("p_jn")
-	sim._process_all_queues()
-	_check(not enemy.waiting, "target-at-node queue entry is cleared instead of sticking")
-	_check(enemy.state == "hold", "target-at-node queue entry resolves to hold")
-
-	# A stale waiting flag without a queue entry must self-heal on the next tick.
-	var sim2 := BattleSim.new(15, 20, 1, {}, false)
-	sim2._spawn_unit(BattleSim.PLAYER, 0, "swordsman")
-	sim2.tick()
-	var u: SimUnit = sim2.units[0]
-	u.waiting = true
-	u.wait_node = "p_base"
-	u.wait_edge = "p_jn"
-	sim2.tick()
-	_check(not u.waiting, "stale queue flag is recovered on the next tick")
-
-
-func _test_queue_timeout_detour() -> void:
-	var sim := BattleSim.new(20, 20, 1, {}, false)
-	for i in range(6):
-		sim._spawn_unit(BattleSim.ENEMY, 0, "swordsman")
-	for i in range(6):
-		var enemy: SimUnit = sim.units[i]
-		_place_edge(enemy, sim, "p_jn", 100.0 + float(i) * 20.0)
-		enemy.edge_slot = i
-		(sim.edge_slots["p_jn"] as Array)[i] = enemy.id
-	sim._spawn_unit(BattleSim.PLAYER, 0, "swordsman")
-	var player: SimUnit = sim.units[sim.units.size() - 1]
-	player.node_id = "p_base"
-	player.edge_id = ""
-	player.forced_entry = ""
-	player.waiting = true
-	player.wait_node = "p_base"
-	player.wait_edge = "p_jn"
-	player.wait_time = sim.queue_timeout + 0.1
-	player.target_edge_id = "jn_e"
-	player.target_edge_s = 10.0
-	player.manual_order = true
-	player.goal_dirty = false
-	player.path = []
-	sim.node_queues["p_base"] = [player.id]
-	sim.tick()
-	_check(not player.waiting, "timed-out queue leaves the blocked edge")
-	_check(player.edge_id == "p_js" or player.path_index < player.path.size(), "timed-out queue takes an alternate route")
-
-
 func _test_lateral_formation() -> void:
 	var sim := BattleSim.new(16, 20, 1, {}, false)
 	for i in range(3):
@@ -246,9 +184,25 @@ func _test_lateral_formation() -> void:
 	mixed._spawn_unit(BattleSim.ENEMY, 0, "archer")
 	for u in mixed.units:
 		_place_edge(u, mixed, "p_jn", 100.0)
+		u.edge_dir = 1
 	mixed._update_lateral_positions(2.0)
-	for u in mixed.units:
-		if u.team == BattleSim.PLAYER:
-			_check(u.lateral_target < 0.0, "player half spreads to its side")
-		else:
-			_check(u.lateral_target > 0.0, "enemy half spreads to its side")
+	for team in [BattleSim.PLAYER, BattleSim.ENEMY]:
+		var negative := false
+		var positive := false
+		for u in mixed.units:
+			if u.team == team:
+				negative = negative or u.lateral_target < 0.0
+				positive = positive or u.lateral_target > 0.0
+		_check(negative and positive, "one-direction units spread around center without yielding to the enemy")
+
+	var opposing := BattleSim.new(23, 20, 1, {}, false)
+	opposing._spawn_unit(BattleSim.PLAYER, 0, "swordsman")
+	opposing._spawn_unit(BattleSim.PLAYER, 0, "archer")
+	var first: SimUnit = opposing.units[0]
+	var second: SimUnit = opposing.units[1]
+	_place_edge(first, opposing, "p_jn", 100.0)
+	_place_edge(second, opposing, "p_jn", 100.0)
+	first.edge_dir = 1
+	second.edge_dir = -1
+	opposing._update_lateral_positions(2.0)
+	_check(first.lateral_target * second.lateral_target < 0.0, "friendly opposite directions yield to opposite sides")

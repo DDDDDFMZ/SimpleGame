@@ -32,7 +32,7 @@ func _test_map_data() -> void:
 	_check(is_equal_approx(map.base_x(0), 140.0), "player base x comes from graph")
 	_check(is_equal_approx(map.base_x(1), 1460.0), "enemy base x comes from graph")
 	_check(is_equal_approx(map.edge_width("p_jn"), 80.0), "edge width loaded")
-	_check(map.edge_slot_count("p_jn", 12.0, 1.0) == 6, "width derives collision slots")
+	_check(map.edge_slot_count("p_jn", 12.0, 1.0) == 6, "width derives parallel lanes")
 	_check(map.node_by_id.has("j_north"), "junction node loaded")
 	_check(map.edge_by_id.has("jn_js"), "cross edge loaded")
 	var roundtrip := MapData.new()

@@ -279,7 +279,7 @@ func _selection_text() -> String:
 			if String(spawn.get("entry", "")) == selected_edge:
 				spawn_ids.append(String(spawn.get("id", "")))
 		var spawn_suffix := "" if spawn_ids.is_empty() else "  出生口 " + "/".join(spawn_ids)
-		return "边 %s  宽%d  槽位%d%s" % [selected_edge, int(edge.get("width", 80.0)), capacity, spawn_suffix]
+		return "边 %s  宽%d  并行%d%s" % [selected_edge, int(edge.get("width", 80.0)), capacity, spawn_suffix]
 	return "点击节点/边选择；拖动节点移动。"
 
 

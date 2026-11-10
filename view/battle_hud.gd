@@ -208,7 +208,7 @@ func _draw() -> void:
 	draw_string(font, Vector2(8.0, 13.0), "金币 %d (+%.1f/秒)  兵力 %d/%d  基地 %d/%d" % [gold, stipend, used, cap, int(hp[0]), int(snapshot.get("base_hp_max", 20))], HORIZONTAL_ALIGNMENT_LEFT, 286.0, 8, Color("#E8D5A9"))
 	var target_text := "悬赏击杀 %d" % target_kills if mode == "endless" else "悬赏 %d/%d" % [target_kills, target_total]
 	draw_string(font, Vector2(8.0, 27.0), "%s  声望 R%d  功勋 %d/%d  晋级 %d金  %s" % [wave_text, rank, fame, promo_kills, promo_cost, target_text], HORIZONTAL_ALIGNMENT_LEFT, 286.0, 8, Color("#B8B0C8"))
-	draw_string(font, Vector2(8.0, 41.0), "路线 %s %d/%d  Q/E 换路  滚轮缩放 ×%.1f  F1 指南" % [route_name, route_used, route_cap, zoom_level], HORIZONTAL_ALIGNMENT_LEFT, 286.0, 7, Color("#8A8498"))
+	draw_string(font, Vector2(8.0, 41.0), "路线 %s %d人 并行%d  Q/E 换路  滚轮缩放 ×%.1f  F1 指南" % [route_name, route_used, route_cap, zoom_level], HORIZONTAL_ALIGNMENT_LEFT, 286.0, 7, Color("#8A8498"))
 	var message := String(snapshot.get("message", ""))
 	if message != "":
 		draw_string(font, Vector2(8.0, 58.0), message, HORIZONTAL_ALIGNMENT_LEFT, 286.0, 8, Color("#E08A3C"))
@@ -609,7 +609,7 @@ func _draw_guide_page_one() -> void:
 	draw_string(font, Vector2(20.0, 166.0), "路线：Q/E 切换出生路线；1-8 当前路线招募，Alt+1-8 下一路线。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
 	draw_string(font, Vector2(20.0, 180.0), "集结点：Shift+右键；新兵/无手动指令单位走向该路线的集结点。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
 	draw_string(font, Vector2(20.0, 194.0), "选中：左键点选、拖框多选、Shift 加选；右键移动，H 驻守，R 返回集结点。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
-	draw_string(font, Vector2(20.0, 208.0), "容量：路线宽度决定每方人数上限；满员在交汇点排队，站位顺序决定入路优先级。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
+	draw_string(font, Vector2(20.0, 208.0), "道路：路径容纳不限；同行并排上限由路面宽度决定，多出的单位自动排到后一排；站位顺序决定并排次序。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
 	draw_string(font, Vector2(20.0, 230.0), "选中信息面板", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color("#D9A441"))
 	draw_string(font, Vector2(20.0, 246.0), "多选时按 协会/攻型/甲型/职业 分组；点击分组后移动/驻守/归线。", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 8, Color("#B8B0C8"))
 	draw_string(font, Vector2(20.0, 268.0), "首份委托流程", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color("#6FA8DC"))

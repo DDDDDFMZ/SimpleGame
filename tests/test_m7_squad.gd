@@ -49,13 +49,6 @@ func _test_mixed_speed_and_slots() -> void:
 		_check(u.move_speed_cap <= u.speed, "member speed cap never exceeds base speed")
 	target_s.sort()
 	_check(target_s.size() == 3, "squad has three members")
-	# Slots are unique while sharing the same edge.
-	var slot_values: Array = []
-	for u in sim.units:
-		if u.edge_id == "p_jn":
-			_check(not slot_values.has(u.edge_slot), "shared edge slot is unique")
-			slot_values.append(u.edge_slot)
-	_check(not slot_values.is_empty(), "units use shared collision slots")
 
 
 func _test_cross_route_groups() -> void:
@@ -86,7 +79,7 @@ func _test_new_order_clears_queue_and_hold_dissolves() -> void:
 	for u in sim.units:
 		if u.waiting:
 			waiting_before += 1
-	_check(waiting_before > 0, "some units are waiting before re-order")
+	_check(waiting_before == 0, "overflow units stay on the path instead of queueing")
 	var ids: Array = []
 	for u in sim.units:
 		ids.append(u.id)

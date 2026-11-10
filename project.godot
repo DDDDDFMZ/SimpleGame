@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="SimpleGame"
-config/version="0.7.2"
+config/version="0.7.3"
 run/main_scene="res://main/level_select.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
@@ -35,3 +35,7 @@ textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.117647, 0.101961, 0.168627, 1)
+
+[audio]
+
+driver/driver="Dummy"

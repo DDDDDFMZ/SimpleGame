@@ -45,6 +45,5 @@
 	"vision_radius": 180.0,
 	"target_range_mult": 1.2,
 	"threat_memory": 2.5,
-	"lateral_speed": 30.0,
-	"queue_timeout": 4.0
+	"lateral_speed": 30.0
 }

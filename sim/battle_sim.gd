@@ -40,8 +40,6 @@ var base_hp: Array = [20, 20]
 var base_hp_max: int = 20
 var base_damage: int = 1
 var rallies: Dictionary = {}
-var edge_slots: Dictionary = {}
-var node_queues: Dictionary = {}
 var station_order: Array = []
 var station_rank_by_id: Dictionary = {}
 var edge_slot_width: float = 14.0
@@ -54,7 +52,6 @@ var vision_radius: float = 180.0
 var target_range_mult: float = 1.2
 var threat_memory: float = 2.5
 var lateral_speed: float = 30.0
-var queue_timeout: float = 4.0
 var unit_clusters: Dictionary = {}
 var squads: Dictionary = {}
 var next_squad_id: int = 1
@@ -129,7 +126,6 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	target_range_mult = float(data.get_balance("target_range_mult", 1.2))
 	threat_memory = float(data.get_balance("threat_memory", 2.5))
 	lateral_speed = float(data.get_balance("lateral_speed", 30.0))
-	queue_timeout = float(data.get_balance("queue_timeout", 4.0))
 
 	map_data = data.map_for_level(level)
 	map_graph = MapGraph.new(map_data)
@@ -142,27 +138,20 @@ func _init(p_seed: int = 1, p_base_hp: int = 20, p_base_damage: int = 1, p_level
 	station_order = _build_station_order(p_profile)
 	for i in range(station_order.size()):
 		station_rank_by_id[String(station_order[i])] = i
-	edge_slots.clear()
-	node_queues.clear()
 	squads.clear()
-	for edge_id in map_data.edge_by_id:
-		var slot_count := map_data.edge_slot_count(String(edge_id), edge_slot_width, edge_slot_padding)
-		var slots: Array = []
-		for i in range(slot_count):
-			slots.append(-1)
-		edge_slots[String(edge_id)] = slots
-	for node_id in map_data.node_by_id:
-		node_queues[String(node_id)] = []
 	for spawn_data in player_spawns:
 		var spawn_id := String(spawn_data.get("id", ""))
 		var entry := String(spawn_data.get("entry", ""))
 		var entry_length := map_graph.edge_length(entry)
 		var rally_s := minf(60.0, entry_length * 0.5)
+		var entry_edge: Dictionary = map_data.edge(entry)
+		var entry_direction := 1 if String(entry_edge.get("from", "")) == String(spawn_data.get("base", "")) else -1
 		rallies[spawn_id] = {
 			"edge_id": entry,
 			"s": rally_s,
 			"pos": map_graph.edge_point(entry, rally_s),
 			"custom": false,
+			"direction": entry_direction,
 		}
 	for spawn_data in player_spawns + enemy_spawns:
 		spawn_cd[String(spawn_data.get("id", ""))] = {}
@@ -225,7 +214,6 @@ func set_station_order(order: Array) -> void:
 		station_rank_by_id[String(station_order[i])] = i
 	for u in units:
 		u.station_rank = int(station_rank_by_id.get(u.def_id, 99))
-	_process_all_queues()
 
 
 func _guild_is_unlocked(guild_id: String) -> bool:
@@ -365,7 +353,6 @@ func tick() -> void:
 	for u in units:
 		if u.alive:
 			_update_unit(u, TICK_DT)
-	_process_all_queues()
 	_update_lateral_positions(TICK_DT)
 	_update_projectiles(TICK_DT)
 	_cleanup_dead()
@@ -487,11 +474,13 @@ func _apply_rally(route_id: String, world_pos: Vector2) -> void:
 		return
 	var rally_edge := String(near["edge_id"])
 	var rally_s := float(near["s"])
+	var rally_direction := _rally_direction(route_id, target_node, rally_edge)
 	rallies[route_id] = {
 		"edge_id": rally_edge,
 		"s": rally_s,
 		"pos": near["pos"],
 		"custom": true,
+		"direction": rally_direction,
 	}
 	for u in units:
 		if u.alive and u.team == PLAYER and u.route_id == route_id and not u.manual_order:
@@ -501,8 +490,8 @@ func _apply_rally(route_id: String, world_pos: Vector2) -> void:
 			# enter, otherwise they stop at the stale default rally point.
 			if u.target_edge_id == rally_edge or u.forced_entry == rally_edge:
 				u.target_edge_id = rally_edge
-				u.target_edge_s = rally_s
-				u.target_point = map_graph.edge_point(rally_edge, rally_s)
+				u.target_edge_s = _rally_target_s(u, rallies[route_id])
+				u.target_point = map_graph.edge_point(rally_edge, u.target_edge_s)
 				u.goal_node = ""
 				if u.edge_id == rally_edge:
 					u.goal_dirty = false
@@ -516,7 +505,6 @@ func _apply_move_squad(unit_ids: Array, world_pos: Vector2) -> void:
 		var u := _unit_by_id(int(id))
 		if u == null or not u.alive or u.team != PLAYER:
 			continue
-		_remove_from_queue(u)
 		_clear_unit_squad(u)
 		members.append(u)
 	if members.is_empty():
@@ -639,13 +627,29 @@ func _mark_move_arrived(u: SimUnit) -> void:
 	squad["arrived"] = true
 	var target_edge := String(squad.get("target_edge_id", ""))
 	var target_s := float(squad.get("target_s", -1.0))
+	var edge_length := map_graph.edge_length(target_edge)
+	var lane_count := maxi(1, map_data.edge_slot_count(target_edge, edge_slot_width, edge_slot_padding))
+	var direction := 1
+	if u.edge_id == target_edge and u.edge_dir < 0:
+		direction = -1
+	var members: Array = []
 	for id in squad.get("member_ids", []):
 		var member := _unit_by_id(int(id))
-		if member == null or not member.alive:
-			continue
+		if member != null and member.alive:
+			members.append(member)
+	members.sort_custom(func(a: SimUnit, b: SimUnit) -> bool:
+		if a.squad_rank == b.squad_rank:
+			return a.id < b.id
+		return a.squad_rank < b.squad_rank
+	)
+	for i in range(members.size()):
+		var member: SimUnit = members[i]
+		var row := int(i / lane_count)
+		var row_spacing := maxf(station_spacing, member.body_height + 2.0)
+		var member_s := clampf(target_s - float(direction) * float(row) * row_spacing, 0.0, edge_length)
 		member.move_priority = false
 		member.target_edge_id = target_edge
-		member.target_edge_s = target_s
+		member.target_edge_s = member_s
 		member.goal_node = ""
 		member.manual_order = true
 		member.hold_position = false
@@ -654,7 +658,7 @@ func _mark_move_arrived(u: SimUnit) -> void:
 			member.path = []
 			member.path_index = 0
 		elif member.edge_id == "":
-			_set_goal_edge(member, target_edge, target_s)
+			_set_goal_edge(member, target_edge, member_s)
 		else:
 			member.goal_dirty = true
 
@@ -868,8 +872,6 @@ func _apply_squad_target(u: SimUnit, target: Dictionary) -> void:
 	var edge_id := String(target.get("edge_id", ""))
 	if edge_id == "":
 		return
-	if u.waiting and u.wait_edge != edge_id:
-		_remove_from_queue(u)
 	var target_s := float(target.get("s", 0.0))
 	if u.edge_id == edge_id:
 		u.goal_node = ""
@@ -1041,6 +1043,8 @@ func _spawn_unit(team: int, route_value: Variant, def_id: String, elite: bool = 
 	unit.spawn_wave = wave_number
 	unit.route_id = route_id
 	unit.station_rank = int(station_rank_by_id.get(def_id, 99))
+	if team == PLAYER:
+		unit.station_slot = _reserve_station_slot(route_id)
 	unit.node_id = base_id
 	unit.edge_id = ""
 	unit.edge_s = 0.0
@@ -1051,7 +1055,7 @@ func _spawn_unit(team: int, route_value: Variant, def_id: String, elite: bool = 
 		if String(rally.get("edge_id", "")) == unit.forced_entry:
 			unit.goal_dirty = false
 			unit.target_edge_id = unit.forced_entry
-			unit.target_edge_s = clampf(float(rally.get("s", 0.0)), 0.0, map_graph.edge_length(unit.forced_entry))
+			unit.target_edge_s = _rally_target_s(unit, rally)
 	next_id += 1
 	units.append(unit)
 
@@ -1159,48 +1163,6 @@ func _update_unit(u: SimUnit, dt: float) -> void:
 		_check_base_arrival(u)
 		return
 
-	if u.waiting:
-		# Auto-defenders can have their rally changed while queued. Recompute
-		# their route goal and leave the old queue if the target edge changed.
-		if u.goal_dirty and not u.manual_order and u.forced_entry == "":
-			var old_wait_edge := u.wait_edge
-			_assign_route_goal(u)
-			if u.target_edge_id != old_wait_edge or old_wait_edge == "":
-				_remove_from_queue(u)
-			else:
-				u.goal_dirty = false
-	if u.waiting:
-		var wait_queue: Array = node_queues.get(u.wait_node, [])
-		if not wait_queue.has(u.id):
-			# A stale flag without a matching node entry would otherwise leave
-			# the unit visually stuck in "queue" forever.
-			u.waiting = false
-			u.wait_node = ""
-			u.wait_edge = ""
-			u.goal_dirty = true
-		else:
-			u.wait_time += dt
-			if u.wait_time > queue_timeout and u.wait_edge != "" and u.forced_entry == "":
-				var wait_node := u.wait_node
-				var blocked_edge := u.wait_edge
-				_remove_from_queue(u)
-				if not _replan_around_friend(u, blocked_edge):
-					_enqueue(u, wait_node, blocked_edge)
-					u.state = "queue"
-					u.target_id = target.id if target != null else -1
-					u.stationary_time += dt
-					_check_base_arrival(u)
-					return
-			elif u.target_edge_id != "" and u.wait_edge != u.target_edge_id:
-				_remove_from_queue(u)
-				u.goal_dirty = true
-			else:
-				u.state = "queue"
-				u.target_id = target.id if target != null else -1
-				u.stationary_time += dt
-				_check_base_arrival(u)
-				return
-
 	# Once all scheduled waves are out, idle defenders seek remaining enemies
 	# instead of holding at a rally forever and stalling the finish condition.
 	if target == null and u.team == PLAYER and defense_mode and next_wave_index >= wave_count and not u.manual_order and not u.hold_position and not u.move_priority:
@@ -1268,6 +1230,47 @@ func _update_at_node(u: SimUnit, dt: float) -> void:
 	u.state = "advance"
 
 
+func _reserve_station_slot(route_id: String) -> int:
+	var used := {}
+	for u in units:
+		if u.alive and u.team == PLAYER and u.route_id == route_id and u.station_slot >= 0:
+			used[u.station_slot] = true
+	var slot := 0
+	while used.has(slot):
+		slot += 1
+	return slot
+
+
+func _rally_direction(route_id: String, target_node: String, rally_edge: String) -> int:
+	var spawn_data := map_data.spawn(route_id)
+	if spawn_data.is_empty() or not map_data.edge_by_id.has(rally_edge):
+		return 1
+	var path := map_graph.path_from_spawn(route_id, target_node)
+	var index := path.find(rally_edge)
+	var entry_node := String(spawn_data.get("base", ""))
+	if index > 0 and index < path.size():
+		var previous: Dictionary = map_data.edge(String(path[index - 1]))
+		var rally_data: Dictionary = map_data.edge(rally_edge)
+		for node_id in [rally_data.get("from", ""), rally_data.get("to", "")]:
+			if String(node_id) == String(previous.get("from", "")) or String(node_id) == String(previous.get("to", "")):
+				entry_node = String(node_id)
+	var edge: Dictionary = map_data.edge(rally_edge)
+	return 1 if String(edge.get("from", "")) == entry_node else -1
+
+
+func _rally_target_s(u: SimUnit, rally: Dictionary) -> float:
+	var edge_id := String(rally.get("edge_id", ""))
+	if edge_id == "":
+		return 0.0
+	var lane_count := maxi(1, map_data.edge_slot_count(edge_id, edge_slot_width, edge_slot_padding))
+	var slot := maxi(0, u.station_slot)
+	var row := slot / lane_count
+	var direction := int(rally.get("direction", 1))
+	var spacing := maxf(station_spacing, u.body_height + 2.0)
+	var edge_length := map_graph.edge_length(edge_id)
+	return clampf(float(rally.get("s", 0.0)) - float(direction) * float(row) * spacing, 0.0, edge_length)
+
+
 func _assign_route_goal(u: SimUnit) -> void:
 	if u.route_id == "":
 		u.goal_node = base_nodes[ENEMY] if u.team == PLAYER else base_nodes[PLAYER]
@@ -1275,9 +1278,7 @@ func _assign_route_goal(u: SimUnit) -> void:
 		return
 	if u.team == PLAYER and rallies.has(u.route_id):
 		var rally: Dictionary = rallies[u.route_id]
-		var rally_s := float(rally.get("s", 0.0))
-		var formation_s := clampf(rally_s, 0.0, map_graph.edge_length(String(rally.get("edge_id", ""))))
-		_set_goal_edge(u, String(rally.get("edge_id", "")), formation_s)
+		_set_goal_edge(u, String(rally.get("edge_id", "")), _rally_target_s(u, rally))
 		return
 	u.goal_node = base_nodes[ENEMY] if u.team == PLAYER else base_nodes[PLAYER]
 	_set_goal_node(u, u.goal_node)
@@ -1336,7 +1337,6 @@ func _try_enter_edge(u: SimUnit, edge_id: String, entry_node: String) -> bool:
 	var entry_s := 0.0 if String(map_data.edge(edge_id).get("from", "")) == entry_node else edge_length
 	if edge_id == u.target_edge_id and absf(u.target_edge_s - entry_s) <= 0.5:
 		# Target point is exactly at the node; do not enter-and-exit in a loop.
-		_remove_from_queue(u)
 		u.node_id = entry_node
 		u.edge_id = ""
 		u.path_index = u.path.size()
@@ -1347,19 +1347,8 @@ func _try_enter_edge(u: SimUnit, edge_id: String, entry_node: String) -> bool:
 		u.state = "hold"
 		_mark_move_arrived(u)
 		return true
-	var slot_index := _free_slot_for(edge_id, u)
-	if slot_index < 0:
-		if _edge_blocked_by_friend(edge_id, u.team) and _replan_around_friend(u, edge_id):
-			return false
-		_enqueue(u, entry_node, edge_id)
-		return false
-	if u.waiting:
-		_remove_from_queue(u)
 	u.edge_id = edge_id
-	u.edge_slot = slot_index
-	var slots: Array = edge_slots.get(edge_id, [])
-	slots[slot_index] = u.id
-	edge_slots[edge_id] = slots
+	u.edge_slot = -1
 	u.lateral = 0.0
 	u.lateral_target = 0.0
 	u.edge_s = 0.0 if String(map_data.edge(edge_id).get("from", "")) == entry_node else map_graph.edge_length(edge_id)
@@ -1384,192 +1373,11 @@ func _try_enter_edge(u: SimUnit, edge_id: String, entry_node: String) -> bool:
 	return true
 
 
-func _edge_blocked_by_friend(edge_id: String, team: int) -> bool:
-	var slots: Array = edge_slots.get(edge_id, [])
-	var has_any := false
-	for value in slots:
-		var id := int(value)
-		if id < 0:
-			return false
-		var occupant := _unit_by_id(id)
-		if occupant == null:
-			return false
-		has_any = true
-		if occupant.team != team:
-			return false
-	return has_any
-
-
-func _replan_around_friend(u: SimUnit, blocked_edge: String) -> bool:
-	if u.node_id == "":
-		return false
-	if u.target_edge_id != "" and u.target_edge_id != blocked_edge:
-		var target := map_data.edge(u.target_edge_id)
-		var from_node := String(target.get("from", ""))
-		var to_node := String(target.get("to", ""))
-		var path_from := map_graph.shortest_path(u.node_id, from_node, [blocked_edge])
-		var path_to := map_graph.shortest_path(u.node_id, to_node, [blocked_edge])
-		if path_from.is_empty() and path_to.is_empty():
-			return false
-		var cost_from := map_graph.path_length(path_from) + u.target_edge_s
-		var cost_to := map_graph.path_length(path_to) + (map_graph.edge_length(u.target_edge_id) - u.target_edge_s)
-		if path_to.is_empty() or (not path_from.is_empty() and cost_from <= cost_to):
-			u.path = path_from
-			u.path.append(u.target_edge_id)
-		else:
-			u.path = path_to
-			u.path.append(u.target_edge_id)
-		u.path_index = 0
-		u.goal_dirty = false
-		return true
-	if u.goal_node != "":
-		var path := map_graph.shortest_path(u.node_id, u.goal_node, [blocked_edge])
-		if path.is_empty():
-			return false
-		u.path = path
-		u.path_index = 0
-		u.goal_dirty = false
-		return true
-	return false
-
-
-func _free_slot_for(edge_id: String, u: SimUnit) -> int:
-	var slots: Array = edge_slots.get(edge_id, [])
-	if slots.is_empty():
-		return -1
-	var count := slots.size()
-	var start := 0
-	var end := count
-	if count >= 2:
-		if u.team == PLAYER:
-			end = int(ceil(count * 0.5))
-		else:
-			start = int(floor(count * 0.5))
-	for i in range(start, end):
-		if int(slots[i]) < 0:
-			return i
-	for i in range(count):
-		if int(slots[i]) < 0:
-			return i
-	return -1
-
-
 func _place_on_edge(u: SimUnit) -> void:
 	var center := map_graph.edge_point(u.edge_id, u.edge_s)
 	var heading := map_graph.edge_heading(u.edge_id, u.edge_s)
 	var normal := Vector2(-heading.y, heading.x)
 	u.set_position(center + normal * u.lateral)
-
-
-func _enqueue(u: SimUnit, node: String, edge_id: String) -> void:
-	if u.waiting and u.wait_node == node and u.wait_edge == edge_id:
-		return
-	_remove_from_queue(u)
-	u.waiting = true
-	u.wait_node = node
-	u.wait_edge = edge_id
-	u.wait_path_index = u.path_index
-	u.wait_time = 0.0
-	var queue: Array = node_queues.get(node, [])
-	queue.append(u.id)
-	queue.sort_custom(_queue_less)
-	node_queues[node] = queue
-	_refresh_queue_positions(node)
-	u.lateral = 0.0
-	u.lateral_target = 0.0
-	u.edge_slot = -1
-	u.edge_id = ""
-	u.node_id = node
-
-
-func _remove_from_queue(u: SimUnit) -> void:
-	if u.wait_node == "":
-		u.waiting = false
-		return
-	var old_node := u.wait_node
-	var queue: Array = node_queues.get(old_node, [])
-	queue.erase(u.id)
-	node_queues[old_node] = queue
-	_refresh_queue_positions(old_node)
-	u.waiting = false
-	u.wait_node = ""
-	u.wait_edge = ""
-
-
-func _queue_less(a: int, b: int) -> bool:
-	var ua := _unit_by_id(a)
-	var ub := _unit_by_id(b)
-	if ua == null or ub == null:
-		return a < b
-	if ua.squad_id >= 0 and ua.squad_id == ub.squad_id:
-		if ua.squad_rank != ub.squad_rank:
-			return ua.squad_rank < ub.squad_rank
-	if ua.station_rank == ub.station_rank:
-		return ua.id < ub.id
-	return ua.station_rank < ub.station_rank
-
-
-func _queue_position(node: String, index: int, edge_id: String = "") -> Vector2:
-	var back := Vector2.DOWN
-	if edge_id != "" and map_data.edge_by_id.has(edge_id):
-		var edge: Dictionary = map_data.edge(edge_id)
-		var heading := map_graph.edge_heading(edge_id, 0.0)
-		var entry_dir := heading if String(edge.get("from", "")) == node else -heading
-		if entry_dir.length_squared() > 0.001:
-			back = -entry_dir.normalized()
-	var side := Vector2(-back.y, back.x)
-	var col := index % 3
-	var row := int(index / 3)
-	return map_data.node_pos(node) + back * (2.0 + float(row) * 18.0) + side * (float(col - 1) * 14.0)
-
-
-func _refresh_queue_positions(node: String) -> void:
-	var queue: Array = node_queues.get(node, [])
-	var primary_edge := ""
-	if not queue.is_empty():
-		var first := _unit_by_id(int(queue[0]))
-		if first != null:
-			primary_edge = first.wait_edge
-	for i in range(queue.size()):
-		var u := _unit_by_id(int(queue[i]))
-		if u != null and u.waiting:
-			u.pos = _queue_position(node, i, primary_edge)
-
-
-func _process_queue(node: String) -> void:
-	var queue: Array = node_queues.get(node, [])
-	if queue.is_empty():
-		return
-	var sorted := queue.duplicate()
-	sorted.sort_custom(_queue_less)
-	var remaining: Array = []
-	for id in sorted:
-		var u := _unit_by_id(int(id))
-		if u == null or not u.alive or not u.waiting:
-			continue
-		var edge_id := u.wait_edge
-		if _free_slot_for(edge_id, u) >= 0:
-			if _try_enter_edge(u, edge_id, node):
-				if u.waiting:
-					_remove_from_queue(u)
-				continue
-		elif _edge_blocked_by_friend(edge_id, u.team):
-			# A wall of friends is not a capacity problem; try an alternate
-			# edge instead of leaving the unit in the node queue forever.
-			_remove_from_queue(u)
-			if _replan_around_friend(u, edge_id):
-				continue
-			_enqueue(u, node, edge_id)
-		remaining.append(id)
-	node_queues[node] = remaining
-	node_queues[node].sort_custom(_queue_less)
-	_refresh_queue_positions(node)
-
-
-func _process_all_queues() -> void:
-	for node_id in node_queues.keys():
-		if not node_queues[node_id].is_empty():
-			_process_queue(String(node_id))
 
 
 func _update_lateral_positions(dt: float) -> void:
@@ -1615,20 +1423,28 @@ func _assign_lateral_group(edge_id: String, group: Array) -> void:
 	for u in group:
 		max_body = maxf(max_body, u.body_width)
 	var spacing := maxf(edge_slot_width, max_body + 1.0)
-	var players: Array = []
-	var enemies: Array = []
+	var buckets := {}
 	for u in group:
-		if u.team == PLAYER:
-			players.append(u)
-		else:
-			enemies.append(u)
-	var max_side := maxi(players.size(), enemies.size())
-	if not players.is_empty() and not enemies.is_empty():
-		var side_center := float(max_side) * spacing * 0.5
-		_spread_lateral_team(players, -side_center, spacing, half_width, max_body)
-		_spread_lateral_team(enemies, side_center, spacing, half_width, max_body)
-	else:
-		_spread_lateral_team(group, 0.0, spacing, half_width, max_body)
+		var direction := 1 if u.edge_dir >= 0 else -1
+		var key := "%d:%d" % [u.team, direction]
+		if not buckets.has(key):
+			buckets[key] = []
+		(buckets[key] as Array).append(u)
+	# Friendly units travelling in opposite directions yield to each other.
+	# Enemy traffic does not shift formations: excess enemies simply overlap
+	# and are handled by combat, per the "do not yield to non-friendly" rule.
+	for team in [PLAYER, ENEMY]:
+		var plus: Array = buckets.get("%d:1" % team, [])
+		var minus: Array = buckets.get("%d:-1" % team, [])
+		if not plus.is_empty() and not minus.is_empty():
+			var max_side := maxi(plus.size(), minus.size())
+			var side_center := float(max_side) * spacing * 0.5
+			_spread_lateral_team(plus, side_center, spacing, half_width, max_body)
+			_spread_lateral_team(minus, -side_center, spacing, half_width, max_body)
+		elif not plus.is_empty():
+			_spread_lateral_team(plus, 0.0, spacing, half_width, max_body)
+		elif not minus.is_empty():
+			_spread_lateral_team(minus, 0.0, spacing, half_width, max_body)
 
 
 func _spread_lateral_team(team_units: Array, center: float, spacing: float, half_width: float, max_body: float) -> void:
@@ -1648,6 +1464,7 @@ func _spread_lateral_team(team_units: Array, center: float, spacing: float, half
 		var u: SimUnit = team_units[i]
 		var offset := center - span * 0.5 + float(i) * spacing
 		u.lateral_target = clampf(offset, -limit, limit)
+		u.edge_slot = i
 
 
 func _move_on_current_edge(u: SimUnit, dt: float) -> void:
@@ -1702,7 +1519,6 @@ func _exit_edge(u: SimUnit, at_target: bool) -> void:
 	var edge: Dictionary = map_data.edge(u.edge_id)
 	var exit_node := String(edge.get("to", "")) if u.edge_dir > 0 else String(edge.get("from", ""))
 	var old_edge := u.edge_id
-	_free_edge_slot(u)
 	u.edge_id = ""
 	u.edge_s = 0.0
 	u.lateral = 0.0
@@ -1711,7 +1527,6 @@ func _exit_edge(u: SimUnit, at_target: bool) -> void:
 	u.set_position(map_data.node_pos(exit_node))
 	u.path_index += 1
 	u.stationary_time = 0.0
-	_process_queue(exit_node)
 	if at_target:
 		u.state = "hold"
 
@@ -1967,28 +1782,10 @@ func _apply_damage(target: SimUnit, amount: float, source_team: int, source_id: 
 		_on_unit_killed(target, source_team)
 
 
-func _free_edge_slot(u: SimUnit) -> void:
-	if u.edge_id == "" or u.edge_slot < 0:
-		return
-	var slots: Array = edge_slots.get(u.edge_id, [])
-	if u.edge_slot < slots.size():
-		slots[u.edge_slot] = -1
-		edge_slots[u.edge_id] = slots
-	u.edge_slot = -1
-
-
 func _release_edge(u: SimUnit) -> void:
 	if u.edge_id != "":
-		var edge_id := u.edge_id
-		var edge_data: Dictionary = map_data.edge(edge_id)
-		var from_node := String(edge_data.get("from", ""))
-		var to_node := String(edge_data.get("to", ""))
-		_free_edge_slot(u)
 		u.edge_id = ""
-		_process_queue(from_node)
-		_process_queue(to_node)
-	if u.waiting:
-		_remove_from_queue(u)
+	u.edge_slot = -1
 
 
 func _on_unit_killed(target: SimUnit, source_team: int) -> void:
